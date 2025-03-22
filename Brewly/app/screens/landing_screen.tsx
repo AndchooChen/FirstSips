@@ -19,7 +19,7 @@ export default function Landing() {
           <Text style={styles.getStartedText}>Get Started</Text>
           <ScreenWideButton
             text="Start Brewing"
-            onPress={() => router.push("/screens/create_shop_screen")}
+            onPress={() => router.push("/screens/shop_register_screen")}
             color="#D4A373"
             textColor="#000000"
           />
