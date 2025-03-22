@@ -1,47 +1,73 @@
-import { View, Text, StyleSheet, Image } from "react-native";
+import { View, Text, StyleSheet, Image, TouchableOpacity, ImageSourcePropType } from "react-native";
 
 type CustomShopProp = {
     name: string;
+    onPress: () => void
     description?: string;
-    image?: string;
+    image?: ImageSourcePropType;
 }
 
 const ShopCard: React.FC<CustomShopProp> = ({
     name,
-    description = " ",
-    image = "../assets/images/stock_coffee.png",
+    onPress,
+    description,
+    image,
 }) => {
+    const defaultImage = require("../assets/images/stock_coffee.png");
+
     return (
-        <View style={styles.background}>
-            <View style={styles.topContainer}>
+        <TouchableOpacity
+            style={styles.container}
+            activeOpacity={0.8}
+            onPress={onPress}
+        >
+            <View style={styles.imageContainer}>
                 <Image
-                    source={require(image)}
+                    source={image || defaultImage}
                     style={styles.image}
                 />
             </View>
-            <View style={styles.bottomContainer}>
-                <Text>{name}</Text>
-                <Text>{description}</Text>
+            <View style={styles.textContainer}>
+                <Text style={styles.title}>{name}</Text>
+                <Text style={styles.description}>{description}</Text>
             </View>
-        </View>
-    )
-}
+        </TouchableOpacity>
+    );
+};
 
 const styles = StyleSheet.create({
-    background: {
+    container: {
         backgroundColor: "#654942",
-        flex: 1,
         borderRadius: 20,
+        overflow: 'hidden',
+        height: 280,
+        width: 360,
+        marginBottom: 15,
     },
-    topContainer: {
-        borderTopEndRadius: 20,
-
-    },
-    bottomContainer: {
-        borderBottomEndRadius: 20,
+    imageContainer: {
+        height: '70%',
+        width: '100%',
     },
     image: {
-        height: "100%",
-        resizeMode: "contain",
-    }
-})
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    textContainer: {
+        padding: 12,
+        height: '30%',
+    },
+    title: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+        marginBottom: 4,
+    },
+    description: {
+        fontSize: 14,
+        color: '#FFFFFF',
+        opacity: 0.8,
+    },
+});
+
+export default ShopCard;
