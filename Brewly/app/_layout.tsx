@@ -9,7 +9,7 @@ export default function RootLayout() {
     >
       <Stack.Screen name="/screens/home_screen" options={{ title: 'Home' }} />
       <Stack.Screen name="/screens/landing_screen" options={{ title: 'Landing' }} />
-      <Stack.Screen name="/screens/create_shop_screen" options={{ title: 'Create Shop'}} />
+      <Stack.Screen name="/screens/store_register_screen" options={{ title: 'Shop Register'}} />
     </Stack>
   );
 }
