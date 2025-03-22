@@ -9,52 +9,45 @@ export default function Home() {
     return (
         <View style={styles.background}>
             <View>
-                
                 <TextInput 
                     label = "First name"
                     value = ""
                     onChangeText = {() => {}}
                     mode = "outlined"
                 />
-
                 <TextInput 
                     label = "Last name"
                     value = ""
                     onChangeText = {() => {}}
                     mode = "outlined"
                 />
-
                 <TextInput 
                     label = "Email"
                     value = ""
                     onChangeText = {() => {}}
                     mode = "outlined"
                 />
-
                 <TextInput 
                     label = "Phone number"
                     value = ""
                     onChangeText = {() => {}}
                     mode = "outlined"
                 />
-
                 <TextInput 
                     label = "Password"
                     value = ""
                     onChangeText = {() => {}}
                     mode = "outlined"
                 />
-
                 <TextInput 
                     label = "Birthday"
                     value = ""
                     onChangeText = {() => {}}
                     mode = "outlined"
                 />
-
                 <ScreenWideButton
                     text="Create Account"
-                    onPress={() => router.push("/screens/landing_screen")}
+                    onPress={() => router.push("/screens/home_screen")}
                     color="#D4A373"
                     textColor="#000000"
                 />
