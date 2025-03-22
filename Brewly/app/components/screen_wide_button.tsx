@@ -29,6 +29,7 @@ const ScreenWideButton: React.FC<CustomButtonProp> = ({
 
 const styles = StyleSheet.create({
     button: {
+        width: "100%",
         paddingVertical: 12,
         paddingHorizontal: 24,
         borderRadius: 12,

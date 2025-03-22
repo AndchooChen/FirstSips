@@ -1,8 +1,8 @@
-import App from "./App";
-import LandingPage from "./navigation/landing_page";
+import Landing from "./screens/landing_screen";
+
 
 export default function Index() {
     return (
-        <LandingPage />
+        <Landing />
     );
 }
