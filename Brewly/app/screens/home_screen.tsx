@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, FlatList } from "react-native";
 import ShopCard from "../components/shop_card";
+import { useRouter } from "expo-router";
 
 const shopData = [
     {
@@ -20,11 +21,20 @@ const shopData = [
 ];
 
 export default function Home() {
+    const router = useRouter();
+
     const renderItem = ({ item }) => (
         <ShopCard
             name={item.name}
             description={item.description}
-            onPress={() => console.log(item.name)}
+            onPress={() => router.push({
+                pathname: "/screens/purchase_screen",
+                params: { 
+                    shopId: item.id,
+                    shopName: item.name,
+                    shopDescription: item.description
+                }
+            })}
         />
     )
 
