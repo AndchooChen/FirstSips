@@ -21,7 +21,6 @@ const mockItems = [
     price: 5.99,
     image: require("../assets/images/cold_brew.jpg"),
   },
-  // Add more mock items here
   {
     id: "2",
     name: "Cold brew",
