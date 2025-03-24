@@ -1,6 +1,8 @@
 import { View, Text, StyleSheet, FlatList } from "react-native";
 import ShopCard from "../components/shop_card";
 import { useRouter } from "expo-router";
+import ScreenWideButton from "../components/screen_wide_button";
+import { FIREBASE_AUTH } from "../auth/FirebaseConfig";
 
 const shopData = [
     {
@@ -23,6 +25,15 @@ const shopData = [
 export default function Home() {
     const router = useRouter();
 
+    const handleLogout = async () => {
+        try {
+            await FIREBASE_AUTH.signOut();
+            router.replace('/screens/landing_screen');
+        } catch (error) {
+            console.log(error);
+        }
+    }    
+
     const renderItem = ({ item }) => (
         <ShopCard
             name={item.name}
@@ -41,6 +52,11 @@ export default function Home() {
     return (
         <View style={styles.background}>
             <Text style={styles.header}>FirstSips</Text>
+            <ScreenWideButton
+                text="Logout"
+                textColor="#FFFFFF"
+                onPress={handleLogout}
+            />
             <FlatList
                 data={shopData}
                 renderItem={renderItem}
@@ -70,5 +86,6 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         width: '100%', // Add this to ensure full width
         alignItems: 'center',
+        marginTop: 10,
     },
 })
