@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import ItemCard from "../components/item_card";
 import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 const mockItems = [
   {
@@ -37,22 +38,26 @@ const mockItems = [
   },
 ];
 
-export default function StoreScreen() {
+export default function PurchaseScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const { shopId, shopName, shopDescription } = params;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#6F4E37" />
         </TouchableOpacity>
       </View>
 
       <View style={styles.profile}>
         <Image
-          source={require("../assets/images/profile_pic.jpg")}
+          source={require("../assets/images/stock_coffee.png")}
           style={styles.avatar}
         />
-        <Text style={styles.storeName}>TransOnlyFood</Text>
-        <Text style={styles.distance}>2.4 mi</Text>
+        <Text style={styles.storeName}>{shopName}</Text>
+        <Text style={styles.description}>{shopDescription}</Text>
       </View>
 
       <View style={styles.searchContainer}>
@@ -154,6 +159,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 6,
     borderRadius: 20,
+  },
+  description: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    paddingHorizontal: 16,
+    marginTop: 4,
   },
   checkoutContainer: {
     position: "absolute",
