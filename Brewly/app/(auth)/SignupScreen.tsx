@@ -46,7 +46,7 @@ export default function SignUp() {
             alert('Account created successfully');
 
             if (isShopOwner) {
-                router.push("../(tabs)/shop/CreateShopScreen")
+                router.push("../(tabs)/shop/CreateShopScreen");
             } else {
                 router.push("../(tabs)/dashboard/DashboardScreen");
             }

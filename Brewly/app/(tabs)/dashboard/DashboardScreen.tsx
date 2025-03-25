@@ -32,7 +32,11 @@ export default function Home() {
         } catch (error) {
             console.log(error);
         }
-    }    
+    }
+    
+    const handleCreateShop = () => {
+        router.push("../shop/CreateShopScreen");
+    };
 
     const renderItem = ({ item }) => (
         <ShopCard
@@ -52,11 +56,20 @@ export default function Home() {
     return (
         <View style={styles.background}>
             <Text style={styles.header}>FirstSips</Text>
-            <ScreenWideButton
-                text="Logout"
-                textColor="#FFFFFF"
-                onPress={handleLogout}
-            />
+            <View style={styles.buttonContainer}>
+                <ScreenWideButton
+                    text="Create Shop"
+                    textColor="#FFFFFF"
+                    color="#D4A373"
+                    onPress={handleCreateShop}
+                />
+                <ScreenWideButton
+                    text="Logout"
+                    textColor="#FFFFFF"
+                    color="#654942"
+                    onPress={handleLogout}
+                />
+            </View>
             <FlatList
                 data={shopData}
                 renderItem={renderItem}
@@ -66,7 +79,7 @@ export default function Home() {
                 horizontal={false} 
             />
         </View>
-    )
+    );
 }
 
 const styles = StyleSheet.create({
@@ -81,6 +94,11 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: 'bold',
         textAlign: 'center',
+    },
+    buttonContainer: {
+        gap: 10,
+        paddingHorizontal: 16,
+        marginBottom: 20,
     },
     flatListContainer: {
         flexGrow: 1,
