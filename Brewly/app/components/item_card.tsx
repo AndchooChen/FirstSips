@@ -61,6 +61,6 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#6F4E37", // Coffee brown 💅
+    color: "#6F4E37",
   },
 });
