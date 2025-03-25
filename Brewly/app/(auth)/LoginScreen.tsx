@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, KeyboardAvoidingView } from "react-native";
+import { View, StyleSheet, KeyboardAvoidingView } from "react-native";
 import { useState } from "react";
 import ScreenWideButton from "../components/screen_wide_button";
 import { useRouter } from "expo-router";
@@ -22,7 +22,7 @@ const Login = () => {
             console.log(userCrediential);
 
             setLoading(false);
-            router.push("/screens/home_screen");
+            router.push("../(tabs)/dashboard/DashboardScreen");
         }
         catch (error: any) {
             setLoading(false);
@@ -56,7 +56,7 @@ const Login = () => {
                     />
                     <ScreenWideButton
                         text="Sign up here"
-                        onPress={() => router.push("/screens/signup_screen")}
+                        onPress={() => router.push("./SignupScreen")}
                         color="#D4A373"
                         textColor="#000000"
                     />

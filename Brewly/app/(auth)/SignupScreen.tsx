@@ -103,7 +103,7 @@ export default function Home() {
             console.log(userCrediential);
 
             alert('Account created successfully');
-            router.push("/screens/dashboard_screen");
+            router.push("../(tabs)/dashboard/DashboardScreen");
         }
         catch (error: any) {
             alert('Sign up failed: ' + error.message);

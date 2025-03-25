@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from "react-native";
-import ItemCard from "../components/item_card";
+import ItemCard from "../../components/item_card";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
@@ -19,21 +19,21 @@ const mockItems = [
     name: "Cold brew",
     description: "This cold brew is made from beans from Columbia",
     price: 5.99,
-    image: require("../assets/images/cold_brew.jpg"),
+    image: require("../../assets/images/cold_brew.jpg"),
   },
   {
     id: "2",
     name: "Cold brew",
     description: "This cold brew is made from beans from Columbia",
     price: 5.99,
-    image: require("../assets/images/cold_brew.jpg"),
+    image: require("../../assets/images/cold_brew.jpg"),
   },
   {
     id: "3",
     name: "Cold brew",
     description: "This cold brew is made from beans from Columbia",
     price: 5.99,
-    image: require("../assets/images/cold_brew.jpg"),
+    image: require("../../assets/images/cold_brew.jpg"),
   },
 ];
 
@@ -52,7 +52,7 @@ export default function PurchaseScreen() {
 
       <View style={styles.profile}>
         <Image
-          source={require("../assets/images/stock_coffee.png")}
+          source={require("../../assets/images/stock_coffee.png")}
           style={styles.avatar}
         />
         <Text style={styles.storeName}>{shopName}</Text>
