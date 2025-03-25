@@ -1,87 +1,27 @@
-import { View, StyleSheet, KeyboardAvoidingView, ScrollView, Platform } from "react-native";
+import { View, StyleSheet, KeyboardAvoidingView, ScrollView, Platform, Text } from "react-native";
 import { useState } from "react";
-import ScreenWideButton from "../components/screen_wide_button";
-import { useRouter } from "expo-router";
-import { TextInput } from 'react-native-paper';
+import { TextInput, Switch } from 'react-native-paper';
 import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore"
+import { doc, setDoc } from "firebase/firestore";
+import { formatBirthday, formatPhoneNumber, validateForm } from "../utils/signUpUtils"
+import ScreenWideButton from "../components/screen_wide_button";
+import { useRouter } from "expo-router";
 
-export default function Home() {
+export default function SignUp() {
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
     const [phoneNumber, setPhoneNumber] = useState("");
     const [birthday, setBirthday] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [isShopOwner, setIsShopOwner] = useState(false);
 
     const router = useRouter();
     const auth = FIREBASE_AUTH;
 
-    const formatBirthday = (text: string) => {
-        // Remove any non-digit characters
-        const cleaned = text.replace(/\D/g, '');
-        
-        // Add slashes after MM and DD
-        let formatted = cleaned;
-        if (cleaned.length >= 4) {
-            formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4, 8)}`;
-        } else if (cleaned.length >= 2) {
-            formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
-        }
-
-        // Validate month and day
-        const month = parseInt(formatted.slice(0, 2));
-        const day = parseInt(formatted.slice(3, 5));
-        
-        if (month > 12) setBirthday('12' + formatted.slice(2));
-        if (day > 31) setBirthday(formatted.slice(0, 3) + '31' + formatted.slice(5));
-        
-        return formatted;
-    };
-
-    const formatPhoneNumber = (text: string) => {
-        // Remove all non-digit characters
-        const cleaned = text.replace(/\D/g, '');
-        
-        // Format the number
-        let formatted = cleaned;
-        if (cleaned.length >= 6) {
-            formatted = `(${cleaned.slice(0, 3)})${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
-        } else if (cleaned.length >= 3) {
-            formatted = `(${cleaned.slice(0, 3)})${cleaned.slice(3)}`;
-        } else if (cleaned.length > 0) {
-            formatted = `(${cleaned}`;
-        }
-        
-        return formatted;
-    };
-
-    const validateForm = () => {
-        if (!firstName || !lastName || !email || !password || !phoneNumber) {
-            alert('Please fill in all fields');
-            return false;
-        }
-        
-        // Add email format validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            alert('Please enter a valid email address');
-            return false;
-        }
-    
-        // Add phone number format validation
-        const phoneRegex = /^\(\d{3}\)\d{3}-\d{4}$/;
-        if (!phoneRegex.test(phoneNumber)) {
-            alert('Please enter a valid phone number');
-            return false;
-        }
-    
-        return true;
-    };
-
     const signUp = async () => {
-        if (!validateForm()) {
+        if (!validateForm(firstName, lastName, email, password, phoneNumber)) {
             return;
         }
 
@@ -89,21 +29,27 @@ export default function Home() {
             const userCrediential = await createUserWithEmailAndPassword(auth, email, password);
             const user = userCrediential.user;
 
+            // Create user document with shop owner status
             await setDoc(doc(FIREBASE_DB, "users", user.uid), {
-                firstName: firstName,
-                lastName: lastName,
-                email: email,
-                phoneNumber: phoneNumber,
-                userType: "storeowner",
+                firstName,
+                lastName,
+                email,
+                phoneNumber,
+                birthday,
+                isShopOwner,
                 createdAt: new Date().toISOString(),
-                storeId: null,
-            }),
+                shopId: null,
+            });
 
             // Check to see if the correct user is signed up
             console.log(userCrediential);
-
             alert('Account created successfully');
-            router.push("../(tabs)/dashboard/DashboardScreen");
+
+            if (isShopOwner) {
+                router.push("../(tabs)/shop/CreateShopScreen")
+            } else {
+                router.push("../(tabs)/dashboard/DashboardScreen");
+            }
         }
         catch (error: any) {
             alert('Sign up failed: ' + error.message);
@@ -140,12 +86,12 @@ export default function Home() {
                         mode="outlined"
                         placeholder="(XXX)XXX-XXXX"
                         keyboardType="numeric"
-                        maxLength={14}  // Length of (XXX)XXX-XXXX
+                        maxLength={14}
                     />
                     <TextInput 
                         label="Birthday"
                         value={birthday}
-                        onChangeText={(text) => setBirthday(formatBirthday(text))}
+                        onChangeText={(text) => setBirthday(formatBirthday(text, setBirthday))}
                         mode="outlined"
                         placeholder="MM/DD/YYYY"
                         keyboardType="numeric"
@@ -164,6 +110,13 @@ export default function Home() {
                         mode = "outlined"
                         secureTextEntry = {true}
                     />
+                    <View style={styles.switchContainer}>
+                        <Text>I want to create a cofee shop</Text>
+                        <Switch
+                            value={isShopOwner}
+                            onValueChange={setIsShopOwner}
+                        />
+                    </View>
                     <ScreenWideButton
                         text="Create Account"
                         onPress={signUp}
@@ -190,6 +143,12 @@ const styles = StyleSheet.create({
     formContainer: {
         width: '100%',
         gap: 12,
+    },
+    switchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 8,
     },
     input: {
         marginBottom: 8,

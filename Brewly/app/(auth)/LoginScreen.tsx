@@ -56,7 +56,7 @@ const Login = () => {
                     />
                     <ScreenWideButton
                         text="Sign up here"
-                        onPress={() => router.push("./SignupScreen")}
+                        onPress={() => router.push("./SignUpScreen")}
                         color="#D4A373"
                         textColor="#000000"
                     />
