@@ -1,8 +1,8 @@
 import { View, Text, StyleSheet, FlatList } from "react-native";
-import ShopCard from "../components/shop_card";
+import ShopCard from "../../components/shop_card"
 import { useRouter } from "expo-router";
-import ScreenWideButton from "../components/screen_wide_button";
-import { FIREBASE_AUTH } from "../auth/FirebaseConfig";
+import ScreenWideButton from "../../components/screen_wide_button";
+import { FIREBASE_AUTH } from "../../auth/FirebaseConfig";
 
 const shopData = [
     {
@@ -28,7 +28,7 @@ export default function Home() {
     const handleLogout = async () => {
         try {
             await FIREBASE_AUTH.signOut();
-            router.replace('/screens/landing_screen');
+            router.replace('../../(public)/LandingScreen');
         } catch (error) {
             console.log(error);
         }
@@ -39,7 +39,7 @@ export default function Home() {
             name={item.name}
             description={item.description}
             onPress={() => router.push({
-                pathname: "/screens/purchase_screen",
+                pathname: "../shop/ShopScreen",
                 params: { 
                     shopId: item.id,
                     shopName: item.name,
