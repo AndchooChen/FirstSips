@@ -1,8 +1,10 @@
 import { View, Text, StyleSheet, FlatList } from "react-native";
+import { useState, useEffect } from "react";
+import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
+import { doc, getDoc } from 'firebase/firestore';
 import ShopCard from "../../components/shop_card"
 import { useRouter } from "expo-router";
 import ScreenWideButton from "../../components/screen_wide_button";
-import { FIREBASE_AUTH } from "../../auth/FirebaseConfig";
 
 const shopData = [
     {
@@ -22,8 +24,30 @@ const shopData = [
     },
 ];
 
-export default function Home() {
+export default function DashboardScreen() {
+    const [hasShop, setHasShop] = useState(false);
     const router = useRouter();
+
+    useEffect(() => {
+        const checkUserShop = async () => {
+            const userId = FIREBASE_AUTH.currentUser?.uid;
+            if (!userId) return;
+
+            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
+            const shopId = userDoc.data()?.shopId;
+            setHasShop(!!shopId);
+        };
+
+        checkUserShop();
+    }, []);
+
+    const handleShopAction = () => {
+        if (hasShop) {
+            router.push("../shop/EditShopScreen");
+        } else {
+            router.push("../shop/CreateShopScreen");
+        }
+    };
 
     const handleLogout = async () => {
         try {
@@ -33,10 +57,6 @@ export default function Home() {
             console.log(error);
         }
     }
-    
-    const handleCreateShop = () => {
-        router.push("../shop/CreateShopScreen");
-    };
 
     const renderItem = ({ item }) => (
         <ShopCard
@@ -57,11 +77,11 @@ export default function Home() {
         <View style={styles.background}>
             <Text style={styles.header}>FirstSips</Text>
             <View style={styles.buttonContainer}>
-                <ScreenWideButton
-                    text="Create Shop"
+            <ScreenWideButton
+                    text={hasShop ? "Edit Shop" : "Create Shop"}
                     textColor="#FFFFFF"
                     color="#D4A373"
-                    onPress={handleCreateShop}
+                    onPress={handleShopAction}
                 />
                 <ScreenWideButton
                     text="Logout"

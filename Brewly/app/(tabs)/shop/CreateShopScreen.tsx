@@ -8,7 +8,7 @@ import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
 import ScreenWideButton from "../../components/screen_wide_button";
 import { useRouter } from "expo-router";
 
-export default function CreateShop() {
+export default function CreateShopScreen() {
     const [shopName, setShopName] = useState("");
     const [description, setDescription] = useState("");
 
@@ -30,6 +30,7 @@ export default function CreateShop() {
 
     const handleCreateShop = async () => {
         try {
+            
             const userId = FIREBASE_AUTH.currentUser?.uid;
             if (!userId) {
                 alert("No authenticated user found");
@@ -42,7 +43,7 @@ export default function CreateShop() {
 
             await setDoc(shopRef, {
                 shopId,
-                ownderId: userId,
+                ownerId: userId,
                 shopName,
                 description,
                 streetAddress,
@@ -60,12 +61,11 @@ export default function CreateShop() {
             });
 
             alert("Shop created successfully");
-            router.push("./ShopScreenShopScreen");
+            router.push("/(tabs)/shop/EditShopScreen");
         } catch (error: any) {
             console.error("error creating shop:", error);
             alert("Failed to create shop: " + error.message);
         }
-
     };
 
     return (
@@ -178,7 +178,6 @@ export default function CreateShop() {
                     textColor="#FFFFFF"
                 />
             </View>
-
         </View>
         </ScrollView>
     );

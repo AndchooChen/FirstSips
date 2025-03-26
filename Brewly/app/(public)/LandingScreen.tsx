@@ -18,7 +18,7 @@ export default function Landing() {
         <View style={styles.whiteBackground}>
           <Text style={styles.getStartedText}>Get Started</Text>
           <ScreenWideButton
-            text="Start Brewing"
+            text="Login"
             onPress={() => router.push("../(auth)/LoginScreen")}
             color="#D4A373"
             textColor="#000000"
@@ -29,8 +29,8 @@ export default function Landing() {
           </View>
 
           <ScreenWideButton
-            text="Start Buying"
-            onPress={() => router.push("../(tabs)/dashboard/DashboardScreen")}
+            text="Create an account"
+            onPress={() => router.push("../(auth)/SignUpScreen")}
             color="#D4A373"
             textColor="#000000"
           />

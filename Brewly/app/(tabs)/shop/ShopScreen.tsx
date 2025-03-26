@@ -37,7 +37,7 @@ const mockItems = [
   },
 ];
 
-export default function PurchaseScreen() {
+export default function ShopScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { shopId, shopName, shopDescription } = params;

@@ -1,12 +1,13 @@
-import { View, StyleSheet, KeyboardAvoidingView } from "react-native";
+import { View, StyleSheet, KeyboardAvoidingView, TouchableOpacity } from "react-native";
 import { useState } from "react";
 import ScreenWideButton from "../components/screen_wide_button";
 import { useRouter } from "expo-router";
 import { TextInput } from "react-native-paper";
 import { FIREBASE_AUTH } from "../auth/FirebaseConfig";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { Ionicons } from '@expo/vector-icons';
 
-const Login = () => {
+const LoginScreen = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
@@ -33,8 +34,16 @@ const Login = () => {
     
     return (
         <View style={styles.background}>
+            {/* Add Back Button */}
+            <TouchableOpacity 
+                style={styles.backButton}
+                onPress={() => router.back()}
+            >
+                <Ionicons name="arrow-back" size={24} color="#6F4E37" />
+            </TouchableOpacity>
             <View>
                 <KeyboardAvoidingView>
+                    
                     <TextInput
                         label="Email"
                         value={email}
@@ -71,7 +80,14 @@ const styles = StyleSheet.create({
         backgroundColor: "#F5EDD8",
         flex: 1,
         justifyContent: "center",
+    },
+    backButton: {
+        position: 'absolute',
+        top: 40,
+        left: 16,
+        padding: 8,
+        zIndex: 1
     }
 })
 
-export default Login;
+export default LoginScreen;
