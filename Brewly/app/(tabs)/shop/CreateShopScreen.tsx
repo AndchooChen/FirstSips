@@ -5,7 +5,7 @@ import { SelectList } from 'react-native-dropdown-select-list';
 import { Ionicons } from "@expo/vector-icons";
 import { doc, setDoc, collection, updateDoc } from "firebase/firestore";
 import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
-import ScreenWideButton from "../../components/screen_wide_button";
+import ScreenWideButton from "../../components/ScreenWideButton";
 import { useRouter } from "expo-router";
 
 export default function CreateShopScreen() {

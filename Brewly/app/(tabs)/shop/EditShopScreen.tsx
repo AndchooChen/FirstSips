@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useState, useEffect } from 'react';
 import { Switch, TextInput, Portal, Modal } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import ScreenWideButton from '../../components/screen_wide_button';
+import ScreenWideButton from '../../components/ScreenWideButton';
 import * as ImagePicker from 'expo-image-picker';
 import { FIREBASE_AUTH, FIREBASE_DB } from '../../auth/FirebaseConfig';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
