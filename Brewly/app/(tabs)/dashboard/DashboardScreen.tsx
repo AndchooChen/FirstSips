@@ -3,27 +3,9 @@ import { useState, useEffect } from "react";
 import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { doc, getDoc } from 'firebase/firestore';
-import ShopCard from "../../components/shop_card"
+import ShopCard from "../../components/ShopCard"
 import { useRouter } from "expo-router";
-import ScreenWideButton from "../../components/screen_wide_button";
-
-const shopData = [
-    {
-        id: 1,
-        name: "Starbucks",
-        description: "Coffee shop chain known for its signature roasts, light bites and WiFi availability.",
-    },
-    {
-        id: 2,
-        name: "Dunkin Donuts",
-        description: "Long-running chain serving signature donuts, breakfast sandwiches and a variety of coffee drinks.",
-    },
-    {
-        id: 3,
-        name: "Kaldis Coffee",
-        description: "Andrew's favorite coffee shop.",
-    },
-];
+import ScreenWideButton from "../../components/ScreenWideButton";
 
 export default function DashboardScreen() {
     const [hasShop, setHasShop] = useState(false);

@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { FIREBASE_DB } from '../../auth/FirebaseConfig';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import ScreenWideButton from '../../components/screen_wide_button';
+import ScreenWideButton from '../../components/ScreenWideButton';
 
 export default function EditItemScreen() {
     const { shopId, itemId } = useLocalSearchParams();
