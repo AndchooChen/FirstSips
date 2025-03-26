@@ -1,8 +1,11 @@
 import { View, Text, StyleSheet, FlatList } from "react-native";
+import { useState, useEffect } from "react";
+import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
+import { collection, query, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import ShopCard from "../../components/shop_card"
 import { useRouter } from "expo-router";
 import ScreenWideButton from "../../components/screen_wide_button";
-import { FIREBASE_AUTH } from "../../auth/FirebaseConfig";
 
 const shopData = [
     {
@@ -22,8 +25,46 @@ const shopData = [
     },
 ];
 
-export default function Home() {
+export default function DashboardScreen() {
+    const [hasShop, setHasShop] = useState(false);
+    const [shops, setShops] = useState([]);
     const router = useRouter();
+
+    useEffect(() => {
+        const checkUserShop = async () => {
+            const userId = FIREBASE_AUTH.currentUser?.uid;
+            if (!userId) return;
+
+            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
+            const shopId = userDoc.data()?.shopId;
+            setHasShop(!!shopId);
+        };
+
+        checkUserShop();
+    }, []);
+
+    // Fetch all shops
+    useEffect(() => {
+        const shopsQuery = query(collection(FIREBASE_DB, 'shops'));
+        
+        const unsubscribe = onSnapshot(shopsQuery, (snapshot) => {
+            const shopsList = [];
+            snapshot.forEach((doc) => {
+                shopsList.push({ id: doc.id, ...doc.data() });
+            });
+            setShops(shopsList);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    const handleShopAction = () => {
+        if (hasShop) {
+            router.push("../shop/EditShopScreen");
+        } else {
+            router.push("../shop/CreateShopScreen");
+        }
+    };
 
     const handleLogout = async () => {
         try {
@@ -32,17 +73,17 @@ export default function Home() {
         } catch (error) {
             console.log(error);
         }
-    }    
+    }
 
     const renderItem = ({ item }) => (
         <ShopCard
-            name={item.name}
+            name={item.shopName}
             description={item.description}
             onPress={() => router.push({
                 pathname: "../shop/ShopScreen",
                 params: { 
-                    shopId: item.id,
-                    shopName: item.name,
+                    shopId: item.shopId,
+                    shopName: item.shopName,
                     shopDescription: item.description
                 }
             })}
@@ -52,21 +93,30 @@ export default function Home() {
     return (
         <View style={styles.background}>
             <Text style={styles.header}>FirstSips</Text>
-            <ScreenWideButton
-                text="Logout"
-                textColor="#FFFFFF"
-                onPress={handleLogout}
-            />
+            <View style={styles.buttonContainer}>
+                <ScreenWideButton
+                    text={hasShop ? "Edit Shop" : "Create Shop"}
+                    textColor="#FFFFFF"
+                    color="#D4A373"
+                    onPress={handleShopAction}
+                />
+                <ScreenWideButton
+                    text="Logout"
+                    textColor="#FFFFFF"
+                    color="#654942"
+                    onPress={handleLogout}
+                />
+            </View>
             <FlatList
-                data={shopData}
+                data={shops}
                 renderItem={renderItem}
-                keyExtractor={item => item.id.toString()}
+                keyExtractor={item => item.shopId}
                 contentContainerStyle={styles.flatListContainer}
                 showsVerticalScrollIndicator={false}
-                horizontal={false} 
+                horizontal={false}
             />
         </View>
-    )
+    );
 }
 
 const styles = StyleSheet.create({
@@ -81,6 +131,11 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: 'bold',
         textAlign: 'center',
+    },
+    buttonContainer: {
+        gap: 10,
+        paddingHorizontal: 16,
+        marginBottom: 20,
     },
     flatListContainer: {
         flexGrow: 1,

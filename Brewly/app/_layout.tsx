@@ -1,5 +1,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useState, useEffect } from "react";
+import { PaperProvider } from 'react-native-paper';
+import { theme } from './styles/themes';
 
 // import auth, { FirebaseAuthTypes } from "@react-native-firebase/auth";
 
@@ -42,22 +44,21 @@ export default function RootLayout() {
   */
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      
-          <Stack.Screen 
-            name="(public)" 
-            options={{ headerShown: false }} 
-          />
-          <Stack.Screen 
-            name="(tabs)" 
-            options={{ headerShown: false }} 
-          />
-          <Stack.Screen 
-            name="(auth)" 
-            options={{ headerShown: false }} 
-          />
-        
-      
-    </Stack>
+    <PaperProvider theme={theme}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen 
+          name="(public)" 
+          options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
+          name="(tabs)" 
+          options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
+          name="(auth)" 
+          options={{ headerShown: false }} 
+        />
+      </Stack>
+    </PaperProvider>
   );
 }
