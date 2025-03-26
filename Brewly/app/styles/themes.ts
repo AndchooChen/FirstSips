@@ -1,8 +1,11 @@
+import { MD3LightTheme } from 'react-native-paper';
+
 export const theme = {
+    ...MD3LightTheme,
     colors: {
-      primary: "#6F4E37",
-      secondary: "#D4A373", 
-      background: "#FAF6F1",
-      text: "#333333",
-    },
-  };
+    ...MD3LightTheme.colors,
+    primary: '#D4A373',
+    secondary: '#6F4E37',
+    background: '#F5EDD8',
+  },
+};

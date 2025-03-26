@@ -1,46 +1,46 @@
-import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  Image,
-  FlatList,
-  TouchableOpacity,
-  TextInput,
-} from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, SafeAreaView, Image, FlatList, TouchableOpacity, TextInput, } from "react-native";
 import ItemCard from "../../components/item_card";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { FIREBASE_DB } from "../../auth/FirebaseConfig";
+import { collection, query, onSnapshot, doc, getDoc } from 'firebase/firestore';
 
-const mockItems = [
-  {
-    id: "1",
-    name: "Cold brew",
-    description: "This cold brew is made from beans from Columbia",
-    price: 5.99,
-    image: require("../../assets/images/cold_brew.jpg"),
-  },
-  {
-    id: "2",
-    name: "Cold brew",
-    description: "This cold brew is made from beans from Columbia",
-    price: 5.99,
-    image: require("../../assets/images/cold_brew.jpg"),
-  },
-  {
-    id: "3",
-    name: "Cold brew",
-    description: "This cold brew is made from beans from Columbia",
-    price: 5.99,
-    image: require("../../assets/images/cold_brew.jpg"),
-  },
-];
-
-export default function PurchaseScreen() {
+export default function ShopScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { shopId, shopName, shopDescription } = params;
+  const [shopData, setShopData] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch shop details
+    const fetchShopData = async () => {
+      try {
+        const shopDoc = await getDoc(doc(FIREBASE_DB, "shops", shopId));
+        if (shopDoc.exists()) {
+          setShopData(shopDoc.data());
+        }
+      } catch (error) {
+        console.error("Error fetching shop:", error);
+      }
+    };
+
+    // Fetch shop items
+    const itemsQuery = query(collection(FIREBASE_DB, `shops/${shopId}/items`));
+    const unsubscribe = onSnapshot(itemsQuery, (snapshot) => {
+      const itemsList = [];
+      snapshot.forEach((doc) => {
+        itemsList.push({ id: doc.id, ...doc.data() });
+      });
+      setItems(itemsList);
+      setLoading(false);
+    });
+
+    fetchShopData();
+    return () => unsubscribe();
+  }, [shopId]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -52,7 +52,11 @@ export default function PurchaseScreen() {
 
       <View style={styles.profile}>
         <Image
-          source={require("../../assets/images/stock_coffee.png")}
+          source={
+            shopData?.profileImage 
+              ? { uri: shopData.profileImage }
+              : require("../../assets/images/no_shop_image.png")
+          }
           style={styles.avatar}
         />
         <Text style={styles.storeName}>{shopName}</Text>
@@ -78,18 +82,27 @@ export default function PurchaseScreen() {
       </View>
 
       <FlatList
-        data={mockItems}
+        data={items}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <ItemCard
             name={item.name}
             description={item.description}
             price={item.price}
-            image={item.image}
+            image={
+              item.images?.[0] 
+                ? { uri: item.images[0] }
+                : require("../../assets/images/no_item_image.png")
+            }
           />
         )}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={() => (
+          <Text style={styles.emptyText}>
+            {loading ? "Loading items..." : "No items available"}
+          </Text>
+        )}
       />
 
       <View style={styles.checkoutContainer}>
