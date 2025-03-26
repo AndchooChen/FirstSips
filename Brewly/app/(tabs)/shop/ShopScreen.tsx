@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { FIREBASE_DB } from "../../auth/FirebaseConfig";
 import { collection, query, onSnapshot, doc, getDoc } from 'firebase/firestore';
 
-export default function ShopScreen() {
+const ShopScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { shopId, shopName, shopDescription } = params;
@@ -197,3 +197,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+
+export default ShopScreen;
