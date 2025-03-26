@@ -26,7 +26,7 @@ export interface Shop {
 
 export interface Item {
     itemId: string;
-    shopId: string;  // References shop.shopId
+    shopId: string;
     name: string;
     description: string;
     price: number;

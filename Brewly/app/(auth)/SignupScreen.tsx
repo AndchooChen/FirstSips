@@ -1,4 +1,4 @@
-import { View, StyleSheet, KeyboardAvoidingView, ScrollView, Platform, Text } from "react-native";
+import { View, StyleSheet, KeyboardAvoidingView, ScrollView, Platform, Text, TouchableOpacity } from "react-native";
 import { useState } from "react";
 import { TextInput, Switch } from 'react-native-paper';
 import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
@@ -7,8 +7,9 @@ import { doc, setDoc } from "firebase/firestore";
 import { formatBirthday, formatPhoneNumber, validateForm } from "../utils/signUpUtils"
 import ScreenWideButton from "../components/screen_wide_button";
 import { useRouter } from "expo-router";
+import { Ionicons } from '@expo/vector-icons';
 
-export default function SignUp() {
+const SignUpScreen = () => {
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
     const [phoneNumber, setPhoneNumber] = useState("");
@@ -58,10 +59,18 @@ export default function SignUp() {
     }
 
     return (
+        
         <KeyboardAvoidingView 
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.background}
         >
+            {/* Add Back Button */}
+            <TouchableOpacity 
+                style={styles.backButton}
+                onPress={() => router.back()}
+            >
+                <Ionicons name="arrow-back" size={24} color="#6F4E37" />
+            </TouchableOpacity>
             <ScrollView 
                 contentContainerStyle={styles.scrollContainer}
                 showsVerticalScrollIndicator={false}
@@ -153,4 +162,13 @@ const styles = StyleSheet.create({
     input: {
         marginBottom: 8,
     },
+    backButton: {
+        position: 'absolute',
+        top: 40,
+        left: 16,
+        padding: 8,
+        zIndex: 1
+    }
 })
+
+export default SignUpScreen;
