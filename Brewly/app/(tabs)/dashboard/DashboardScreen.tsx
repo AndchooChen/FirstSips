@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, FlatList } from "react-native";
 import { useState, useEffect } from "react";
 import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
+import { collection, query, onSnapshot } from 'firebase/firestore';
 import { doc, getDoc } from 'firebase/firestore';
 import ShopCard from "../../components/shop_card"
 import { useRouter } from "expo-router";
@@ -26,6 +27,7 @@ const shopData = [
 
 export default function DashboardScreen() {
     const [hasShop, setHasShop] = useState(false);
+    const [shops, setShops] = useState([]);
     const router = useRouter();
 
     useEffect(() => {
@@ -39,6 +41,21 @@ export default function DashboardScreen() {
         };
 
         checkUserShop();
+    }, []);
+
+    // Fetch all shops
+    useEffect(() => {
+        const shopsQuery = query(collection(FIREBASE_DB, 'shops'));
+        
+        const unsubscribe = onSnapshot(shopsQuery, (snapshot) => {
+            const shopsList = [];
+            snapshot.forEach((doc) => {
+                shopsList.push({ id: doc.id, ...doc.data() });
+            });
+            setShops(shopsList);
+        });
+
+        return () => unsubscribe();
     }, []);
 
     const handleShopAction = () => {
@@ -60,13 +77,13 @@ export default function DashboardScreen() {
 
     const renderItem = ({ item }) => (
         <ShopCard
-            name={item.name}
+            name={item.shopName}
             description={item.description}
             onPress={() => router.push({
                 pathname: "../shop/ShopScreen",
                 params: { 
-                    shopId: item.id,
-                    shopName: item.name,
+                    shopId: item.shopId,
+                    shopName: item.shopName,
                     shopDescription: item.description
                 }
             })}
@@ -77,7 +94,7 @@ export default function DashboardScreen() {
         <View style={styles.background}>
             <Text style={styles.header}>FirstSips</Text>
             <View style={styles.buttonContainer}>
-            <ScreenWideButton
+                <ScreenWideButton
                     text={hasShop ? "Edit Shop" : "Create Shop"}
                     textColor="#FFFFFF"
                     color="#D4A373"
@@ -91,12 +108,12 @@ export default function DashboardScreen() {
                 />
             </View>
             <FlatList
-                data={shopData}
+                data={shops}
                 renderItem={renderItem}
-                keyExtractor={item => item.id.toString()}
+                keyExtractor={item => item.shopId}
                 contentContainerStyle={styles.flatListContainer}
                 showsVerticalScrollIndicator={false}
-                horizontal={false} 
+                horizontal={false}
             />
         </View>
     );
