@@ -1,10 +1,14 @@
 const express = require('express');
-const app = express();
-const port = 3000;
+const cors = require('cors');
+const authRoutes = require('./routes/authRoutes');
 
-app.get('/', (req, res) => {
-  res.send('Hello World!');
-});
+const app = express();
+const port = 3001;
+
+app.use(cors());
+app.use(express.json());
+
+app.use('/api/auth', authRoutes);
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);

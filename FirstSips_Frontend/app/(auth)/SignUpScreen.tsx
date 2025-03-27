@@ -8,6 +8,7 @@ import { formatBirthday, formatPhoneNumber, validateForm } from "../utils/signUp
 import ScreenWideButton from "../components/ScreenWideButton";
 import { useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 
 const SignUpScreen = () => {
     const [firstName, setFirstName] = useState("");
@@ -26,40 +27,34 @@ const SignUpScreen = () => {
             return;
         }
 
+        const userData = {
+            firstName,
+            lastName,
+            email,
+            password,
+            birthday,
+            phoneNumber,
+            isShopOwner,
+        }
+
         try {
-            const userCrediential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCrediential.user;
+            const response = await axios.post("http://localhost:3001/api/auth/register", userData);
+            console.log(response.data);
 
-            // Create user document with shop owner status
-            await setDoc(doc(FIREBASE_DB, "users", user.uid), {
-                firstName,
-                lastName,
-                email,
-                phoneNumber,
-                birthday,
-                isShopOwner,
-                createdAt: new Date().toISOString(),
-                shopId: null,
-            });
-
-            // Check to see if the correct user is signed up
-            console.log(userCrediential);
-            alert('Account created successfully');
-
-            if (isShopOwner) {
+            alert('Account created!');
+            if(isShopOwner) {
                 router.push("../(tabs)/shop/CreateShopScreen");
-            } else {
+            }
+            else {
                 router.push("../(tabs)/dashboard/DashboardScreen");
             }
-        }
-        catch (error: any) {
-            alert('Sign up failed: ' + error.message);
-            console.log(error);
+        } catch (error) {
+            console.error(error);
+            alert("Sign up failed");
         }
     }
 
     return (
-        
         <KeyboardAvoidingView 
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.background}
