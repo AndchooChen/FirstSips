@@ -5,7 +5,7 @@ import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { formatBirthday, formatPhoneNumber, validateForm } from "../utils/signUpUtils"
-import ScreenWideButton from "../components/screen_wide_button";
+import ScreenWideButton from "../components/ScreenWideButton";
 import { useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 

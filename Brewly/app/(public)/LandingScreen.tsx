@@ -1,6 +1,6 @@
 import { View, Text, SafeAreaView, Image } from "react-native";
 import { StyleSheet } from "react-native";
-import ScreenWideButton from "../components/screen_wide_button";
+import ScreenWideButton from "../components/ScreenWideButton";
 import { useRouter } from "expo-router";
 
 export default function Landing() {

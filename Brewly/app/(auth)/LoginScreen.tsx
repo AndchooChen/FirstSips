@@ -1,6 +1,6 @@
 import { View, StyleSheet, KeyboardAvoidingView, TouchableOpacity } from "react-native";
 import { useState } from "react";
-import ScreenWideButton from "../components/screen_wide_button";
+import ScreenWideButton from "../components/ScreenWideButton";
 import { useRouter } from "expo-router";
 import { TextInput } from "react-native-paper";
 import { FIREBASE_AUTH } from "../auth/FirebaseConfig";
