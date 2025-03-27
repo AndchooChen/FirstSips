@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { FIREBASE_DB, FIREBASE_AUTH } from '../../auth/FirebaseConfig';
 import { doc, collection, setDoc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
-import ScreenWideButton from '../../components/screen_wide_button';
+import ScreenWideButton from '../../components/ScreenWideButton';
 
 const AddItemScreen = () => {
     const [name, setName] = useState('');

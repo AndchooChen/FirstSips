@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, SafeAreaView, Image, FlatList, TouchableOpacity, TextInput, } from "react-native";
-import ItemCard from "../../components/item_card";
+import ItemCard from "../../components/ItemCard";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { FIREBASE_DB } from "../../auth/FirebaseConfig";
 import { collection, query, onSnapshot, doc, getDoc } from 'firebase/firestore';
 
-export default function ShopScreen() {
+const ShopScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { shopId, shopName, shopDescription } = params;
   const [shopData, setShopData] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [cartItems, setCartItems] = useState([]);
 
   useEffect(() => {
     // Fetch shop details
@@ -41,6 +42,36 @@ export default function ShopScreen() {
     fetchShopData();
     return () => unsubscribe();
   }, [shopId]);
+
+  // Add to cart function
+  const handleAddToCart = (item) => {
+    const existingItem = cartItems.find(cartItem => cartItem.id === item.id);
+    if (existingItem) {
+      setCartItems(cartItems.map(cartItem => 
+        cartItem.id === item.id 
+          ? {...cartItem, quantity: cartItem.quantity + 1}
+          : cartItem
+      ));
+    } else {
+      setCartItems([...cartItems, {...item, quantity: 1}]);
+    }
+  };
+
+  // Update handleCheckout to pass cart items
+  const handleCheckout = () => {
+    if (cartItems.length === 0) {
+      alert('Please add items to your cart');
+      return;
+    }
+    
+    router.push({
+      pathname: "../../(checkout)/CheckoutScreen",
+      params: { 
+        items: JSON.stringify(cartItems),
+        shopId: shopId
+      }
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -82,32 +113,28 @@ export default function ShopScreen() {
       </View>
 
       <FlatList
-        data={items}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ItemCard
-            name={item.name}
-            description={item.description}
-            price={item.price}
-            image={
-              item.images?.[0] 
-                ? { uri: item.images[0] }
-                : require("../../assets/images/no_item_image.png")
-            }
-          />
-        )}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={() => (
-          <Text style={styles.emptyText}>
-            {loading ? "Loading items..." : "No items available"}
-          </Text>
-        )}
-      />
+      data={items}
+      renderItem={({ item }) => (
+        <ItemCard
+          name={item.name}
+          description={item.description}
+          price={item.price}
+          image={item.images?.[0] 
+            ? { uri: item.images[0] }
+            : require("../../assets/images/no_item_image.png")}
+          onAddToCart={() => handleAddToCart(item)}
+        />
+      )}
+    />
 
       <View style={styles.checkoutContainer}>
-        <TouchableOpacity style={styles.checkoutButton}>
-          <Text style={styles.checkoutText}>Proceed to Checkout</Text>
+        <TouchableOpacity 
+          style={styles.checkoutButton}
+          onPress={handleCheckout}  // Remove the arrow function
+        >
+          <Text style={styles.checkoutText}>
+            Proceed to Checkout ({cartItems.length} items)
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -197,3 +224,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+
+export default ShopScreen;
