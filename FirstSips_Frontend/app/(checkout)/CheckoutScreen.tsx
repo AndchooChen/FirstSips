@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { FIREBASE_DB } from "../auth/FirebaseConfig";
 import { doc, getDoc } from 'firebase/firestore';
+import PaymentComponent from '../components/PaymentComponent';
 
 type CartItem = {
     id: string;
@@ -24,70 +25,36 @@ const CheckoutScreen = () => {
     const params = useLocalSearchParams();
     const { items, shopId } = params;
 
-        // Parse cart items from params with type safety
-        const cartItems: CartItem[] = useMemo(() => {
-            try {
-                return JSON.parse(items as string || '[]');
-            } catch (error) {
-                console.error('Error parsing cart items:', error);
-                return [];
-            }
-        }, [items]);
-    
-        // Calculate totals with error handling
-        const totals = useMemo(() => {
-            const subtotal = cartItems.reduce((sum, item) => 
-                sum + (item.price * item.quantity), 0);
-            const tax = subtotal * 0.0825; // 8.25% tax
-            const deliveryFee = isDelivery ? 5.99 : 0;
-            const total = subtotal + tax + deliveryFee;
-    
-            return {
-                subtotal,
-                tax,
-                deliveryFee,
-                total
-            };
-        }, [cartItems, isDelivery]);
-    
-        // Add validation for order placement
-        const handlePlaceOrder = () => {
-            if (cartItems.length === 0) {
-                alert('Please add items to your cart');
-                return;
-            }
-    
-            if (!phoneNumber) {
-                alert('Please enter your phone number');
-                return;
-            }
-    
-            if (isDelivery && !deliveryAddress) {
-                alert('Please enter your delivery address');
-                return;
-            }
-    
-            if (!pickupTime) {
-                alert('Please select a pickup time');
-                return;
-            }
-    
-            // TODO: Implement order creation in Firebase
-            console.log('Order placed:', {
-                items: cartItems,
-                isDelivery,
-                phoneNumber,
-                pickupTime,
-                deliveryAddress,
-                shopId,
-                ...totals
-            });
-        };
+    // Parse cart items from params with type safety
+    const cartItems: CartItem[] = useMemo(() => {
+        try {
+            return JSON.parse(items as string || '[]');
+        } catch (error) {
+            console.error('Error parsing cart items:', error);
+            return [];
+        }
+    }, [items]);
 
-    const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = subtotal * 0.0825; // 8.25% tax
-    const deliveryFee = isDelivery ? 5.99 : 0;
-    const total = subtotal + tax + deliveryFee;
+    // Calculate totals with error handling
+    const totals = useMemo(() => {
+        const subtotal = cartItems.reduce((sum, item) => 
+            sum + (item.price * item.quantity), 0);
+        const tax = subtotal * 0.0825; // 8.25% tax
+        const deliveryFee = isDelivery ? 5.99 : 0;
+        const total = subtotal + tax + deliveryFee;
+
+        return {
+            subtotal,
+            tax,
+            deliveryFee,
+            total
+        };
+    }, [cartItems, isDelivery]);
+
+    const handlePaymentSuccess = (paymentIntent: any) => {
+        console.log('Payment successful:', paymentIntent);
+        router.push("../success");
+    };
 
     useEffect(() => {
         const fetchShopData = async () => {
@@ -102,12 +69,10 @@ const CheckoutScreen = () => {
     return (
         <SafeAreaView style={styles.safeArea}>
             <ScrollView style={styles.container}>
-                {/* Back Arrow */}
                 <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color="#6F4E37" />
                 </TouchableOpacity>
 
-                {/* Delivery/Pickup Toggle */}
                 <View style={styles.section}>
                     <View style={styles.toggleContainer}>
                         <Text style={styles.toggleText}>Delivery</Text>
@@ -119,7 +84,6 @@ const CheckoutScreen = () => {
                     </View>
                 </View>
 
-                {/* Location Information */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>
                         {isDelivery ? 'Delivery Address' : 'Pickup Location'}
@@ -144,7 +108,6 @@ const CheckoutScreen = () => {
                     )}
                 </View>
 
-                {/* Time Selection */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>
                         {isDelivery ? 'Delivery Time' : 'Pickup Time'}
@@ -158,7 +121,6 @@ const CheckoutScreen = () => {
                     />
                 </View>
 
-                {/* Cart Items */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Order Details</Text>
                     {cartItems.map((item, index) => (
@@ -172,7 +134,6 @@ const CheckoutScreen = () => {
                     ))}
                 </View>
 
-                {/* Order Summary */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Order Summary</Text>
                     <View style={styles.summaryRow}>
@@ -196,10 +157,13 @@ const CheckoutScreen = () => {
                     </View>
                 </View>
 
-                {/* Place Order Button */}
-                <TouchableOpacity style={styles.placeOrderButton} onPress={handlePlaceOrder}>
-                    <Text style={styles.placeOrderText}>Place Order</Text>
-                </TouchableOpacity>
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Payment</Text>
+                    <PaymentComponent 
+                        amount={Math.round(totals.total * 100)} // Convert to cents for Stripe
+                        onSuccess={handlePaymentSuccess}
+                    />
+                </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -214,6 +178,9 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5EDD8',
         padding: 16,
+    },
+    backButton: {
+        marginBottom: 16,
     },
     section: {
         backgroundColor: '#FFFFFF',
@@ -293,19 +260,7 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#6F4E37',
-    },
-    placeOrderButton: {
-        backgroundColor: '#D4A373',
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginVertical: 16,
-    },
-    placeOrderText: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
+    }
 });
 
 export default CheckoutScreen;
