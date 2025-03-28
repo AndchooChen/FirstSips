@@ -1,64 +1,31 @@
-import { Stack, useRouter, useSegments } from 'expo-router';
-import { useState, useEffect } from "react";
+import { Stack } from 'expo-router';
 import { PaperProvider } from 'react-native-paper';
 import { theme } from './styles/themes';
-
-// import auth, { FirebaseAuthTypes } from "@react-native-firebase/auth";
+import { StripeProvider } from '@stripe/stripe-react-native';
+// import { STRIPE_PUBLISHABLE_KEY } from '@env';
 
 export default function RootLayout() {
-
-  /*
-  const [initializing, setInitializing] = useState(true);
-  const [user, setUser] = useState<FirebaseAuthTypes.User | null>();
-  const router = useRouter();
-  const segments = useSegments();
-
-  const onAuthStateChanged = (user: FirebaseAuthTypes.User | null) => {
-    console.log('onAuthStateChanged', user);
-    setUser(user)
-    if (initializing) {
-      setInitializing(false);
-    }
-  }
-
-  useEffect(() => {
-    const subscriber = auth().onAuthStateChanged(onAuthStateChanged);
-    return subscriber;
-  })
-
-  useEffect(() => {
-    if (initializing) {
-      return;
-    }
-    
-    const inAuthGroup = segments[0] === '(auth)';
-
-    if (user && !inAuthGroup) {
-      router.replace('/(auth)/DashboardScreen');
-    } 
-    else if (!user && inAuthGroup) {
-      router.replace('(/public)/LandingScreen')
-    }
-
-  }, [user, initializing])
-  */
-
   return (
-    <PaperProvider theme={theme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen 
-          name="(public)" 
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen 
-          name="(tabs)" 
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen 
-          name="(auth)" 
-          options={{ headerShown: false }} 
-        />
-      </Stack>
-    </PaperProvider>
+    <StripeProvider
+      publishableKey="sk_test_51R72STPIBKQ6KVT8UO01em7IPghH1Ln0bGZaJwcolRmTw7hhomH8bLvMpfdaCaxIQBtfW6yQAGOI1IKSyQ8Y4MvZ00ysJYwFPT"
+      merchantIdentifier="FirstSips"
+    >
+      <PaperProvider theme={theme}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen 
+            name="(public)" 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="(tabs)" 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="(auth)" 
+            options={{ headerShown: false }} 
+          />
+        </Stack>
+      </PaperProvider>
+    </StripeProvider>
   );
 }
