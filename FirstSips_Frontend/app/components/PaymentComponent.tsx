@@ -1,98 +1,63 @@
-import { View, Alert, StyleSheet, Platform } from 'react-native';
-import { useState, useEffect } from 'react';
+import { View, Alert, StyleSheet } from 'react-native';
+import { useState } from 'react';
 import { useStripe } from '@stripe/stripe-react-native';
 import { Button } from 'react-native-paper';
 
 interface PaymentComponentProps {
   amount: number;
-  onSuccess: () => void;
+  onSuccess: (paymentIntent: any) => void;
 }
 
 const PaymentComponent = ({ amount, onSuccess }: PaymentComponentProps) => {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
-  const [paymentSheetReady, setPaymentSheetReady] = useState(false);
 
-  // Use your computer's IP address instead of localhost for device testing
-  const API_URL = Platform.select({
-    android: 'http://10.0.2.2:5000',  // Android Emulator
-    ios: 'http://localhost:5000',     // iOS Simulator
-    default: 'http://localhost:5000'  // Web
-  });
-
-  useEffect(() => {
-    initializePayment();
-  }, [amount]);
-
-  const initializePayment = async () => {
+  const handlePayment = async () => {
     try {
       setLoading(true);
-      setPaymentSheetReady(false);
 
-      const response = await fetch(`${API_URL}/payments/create-payment-intent`, {
+      // 1. Create Payment Intent
+      const response = await fetch('http://localhost:5000/payments/create-payment-intent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: Math.round(amount), // Ensure amount is rounded
+          amount: amount,
           currency: 'usd',
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create payment intent');
-      }
-
       const { clientSecret } = await response.json();
 
-      const { error } = await initPaymentSheet({
+      // 2. Initialize Payment Sheet
+      const { error: initError } = await initPaymentSheet({
         merchantDisplayName: 'FirstSips',
         paymentIntentClientSecret: clientSecret,
-        applePay: {
-          merchantCountryCode: 'US',
-        },
-        googlePay: true,
-        style: 'automatic',
-        returnURL: 'firstsips://payment-result', // Add your app's URL scheme
+        defaultBillingDetails: {
+          name: '', // Can be populated if you have user data
+        }
       });
 
-      if (error) {
-        throw new Error(error.message);
+      if (initError) {
+        throw new Error(initError.message);
       }
 
-      setPaymentSheetReady(true);
+      // 3. Present Payment Sheet
+      const { error: presentError } = await presentPaymentSheet();
+
+      if (presentError) {
+        throw new Error(presentError.message);
+      }
+
+      Alert.alert('Success', 'Payment completed!');
+      onSuccess(clientSecret);
+
     } catch (error: any) {
-      Alert.alert(
-        'Payment Setup Error',
-        error.message || 'Failed to initialize payment'
-      );
-      console.error('Payment Setup Error:', error);
+      Alert.alert('Error', error.message);
+      console.error('Payment Error:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handlePayment = async () => {
-    if (!paymentSheetReady) {
-      Alert.alert('Error', 'Payment not ready');
-      return;
-    }
-
-    try {
-      const { error } = await presentPaymentSheet();
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      onSuccess();
-    } catch (error: any) {
-      Alert.alert(
-        'Payment Error',
-        error.message || 'Payment failed'
-      );
-      console.error('Payment Error:', error);
     }
   };
 
@@ -102,10 +67,10 @@ const PaymentComponent = ({ amount, onSuccess }: PaymentComponentProps) => {
         mode="contained"
         onPress={handlePayment}
         loading={loading}
-        disabled={loading || !paymentSheetReady}
+        disabled={loading}
         style={styles.button}
       >
-        Place Order ${(amount / 100).toFixed(2)}
+        Pay ${(amount / 100).toFixed(2)}
       </Button>
     </View>
   );
@@ -113,12 +78,12 @@ const PaymentComponent = ({ amount, onSuccess }: PaymentComponentProps) => {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
+    width: '100%',
   },
   button: {
-    marginTop: 20,
-    paddingVertical: 8,
-  },
+    padding: 8,
+    backgroundColor: '#6F4E37',
+  }
 });
 
 export default PaymentComponent;
