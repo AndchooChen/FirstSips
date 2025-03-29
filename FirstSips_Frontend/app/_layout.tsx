@@ -7,7 +7,7 @@ import { StripeProvider } from '@stripe/stripe-react-native';
 export default function RootLayout() {
   return (
     <StripeProvider
-      publishableKey="sk_test_51R72STPIBKQ6KVT8UO01em7IPghH1Ln0bGZaJwcolRmTw7hhomH8bLvMpfdaCaxIQBtfW6yQAGOI1IKSyQ8Y4MvZ00ysJYwFPT"
+      publishableKey="pk_test_51R72STPIBKQ6KVT8MFXWOp07xHcjHtJeNFaikqK619zZCqqaQ98k0uLbdmRQGhZbJuF1U8S3b5wixsJhdiVlU1XF00mJuavy5U"
       merchantIdentifier="FirstSips"
     >
       <PaperProvider theme={theme}>
