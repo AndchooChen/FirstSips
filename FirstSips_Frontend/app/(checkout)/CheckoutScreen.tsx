@@ -53,7 +53,7 @@ const CheckoutScreen = () => {
 
     const handlePaymentSuccess = (paymentIntent: any) => {
         console.log('Payment successful:', paymentIntent);
-        router.push("../success");
+        router.push("/(checkout)/SuccessScreen");
     };
 
     useEffect(() => {
