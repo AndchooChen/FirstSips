@@ -34,25 +34,3 @@ export interface Item {
     imageUrl?: string;
     createdAt: string;
 }
-
-type Order = {
-    orderId: string;
-    userId: string;
-    shopId: string;
-    items: Array<{
-      id: string;
-      name: string;
-      price: number;
-      quantity: number;
-    }>;
-    status: 'pending' | 'paid' | 'preparing' | 'ready' | 'completed' | 'cancelled';
-    total: number;
-    tax: number;
-    deliveryFee?: number;
-    isDelivery: boolean;
-    deliveryAddress?: string;
-    pickupTime: string;
-    phoneNumber: string;
-    createdAt: string;
-    updatedAt: string;
-  };
