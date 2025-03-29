@@ -1,4 +1,4 @@
-import { View, Alert, StyleSheet } from 'react-native';
+import { View, Alert, StyleSheet, Platform } from 'react-native';
 import { useState } from 'react';
 import { useStripe } from '@stripe/stripe-react-native';
 import { Button } from 'react-native-paper';
@@ -12,12 +12,20 @@ const PaymentComponent = ({ amount, onSuccess }: PaymentComponentProps) => {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
 
+  // Update API URL with your actual IP address
+  const API_URL = Platform.select({
+    android: 'http://192.168.50.84:5000',  // Updated for Android
+    ios: 'http://192.168.50.84:5000',      // Updated for iOS
+    default: 'http://192.168.50.84:5000'   // Updated default
+  });
+
   const handlePayment = async () => {
     try {
       setLoading(true);
+      console.log('Making request to:', `${API_URL}/payments/create-payment-intent`); // Debug log
 
-      // 1. Create Payment Intent
-      const response = await fetch('http://localhost:5000/payments/create-payment-intent', {
+      // 1. Create Payment Intent - Use API_URL instead of localhost
+      const response = await fetch(`${API_URL}/payments/create-payment-intent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -28,7 +36,14 @@ const PaymentComponent = ({ amount, onSuccess }: PaymentComponentProps) => {
         }),
       });
 
-      const { clientSecret } = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Response data:', data); // Debug log
+
+      const { clientSecret } = data;
 
       // 2. Initialize Payment Sheet
       const { error: initError } = await initPaymentSheet({
