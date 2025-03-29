@@ -2,76 +2,124 @@ import { View, Alert, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { useStripe } from '@stripe/stripe-react-native';
 import { Button } from 'react-native-paper';
+import { addDoc, collection } from 'firebase/firestore';
+import { FIREBASE_DB } from '../auth/FirebaseConfig';
+import { OrderStatus } from '../types/order';
+
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  options?: {
+    size?: string;
+    extras?: string[];
+  };
+  notes?: string;
+}
 
 interface PaymentComponentProps {
   amount: number;
-  onSuccess: (paymentIntent: any) => void;
+  onSuccess: (result: { orderId: string; clientSecret: string }) => void;
+  cartItems: CartItem[];
+  shopId: string;
+  customerInfo: {
+    name: string;
+    phone: string;
+    pickupTime: Date;
+    isDelivery: boolean;
+    address?: string;
+  };
+  setIsProcessing: (isProcessing: boolean) => void;
 }
 
-const PaymentComponent = ({ amount, onSuccess }: PaymentComponentProps) => {
+const PaymentComponent = ({ 
+  amount, 
+  onSuccess, 
+  cartItems, 
+  shopId, 
+  customerInfo,
+  setIsProcessing 
+}: PaymentComponentProps) => {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
 
+  const createOrder = async (paymentIntentId: string) => {
+    try {
+      const orderRef = collection(FIREBASE_DB, 'orders');
+      const newOrder = {
+        shopId,
+        customerId: 'CURRENT_USER_ID', // Replace with actual user ID
+        customerName: customerInfo.name,
+        customerPhone: customerInfo.phone,
+        items: cartItems,
+        totalAmount: amount,
+        paymentIntentId,
+        status: 'pending' as OrderStatus,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        pickupTime: customerInfo.pickupTime,
+        isDelivery: customerInfo.isDelivery,
+        deliveryAddress: customerInfo.isDelivery ? customerInfo.address : null,
+      };
+
+      const docRef = await addDoc(orderRef, newOrder);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating order:', error);
+      throw new Error('Failed to create order');
+    }
+  };
+
   const handlePayment = async () => {
-  try {
-    setLoading(true);
-    console.log('Making request to:', `http://192.168.50.84:5000/payments/create-payment-intent`);
-    console.log('Amount being sent:', amount);
+    try {
+      setIsProcessing(true);
+      
+      // Create Payment Intent
+      const response = await fetch(`http://192.168.50.84:5000/payments/create-payment-intent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: Math.round(amount),
+          currency: 'usd',
+        }),
+      });
 
-    const response = await fetch(`http://192.168.50.84:5000/payments/create-payment-intent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: Math.round(amount),
-        currency: 'usd',
-      }),
-    });
+      const { clientSecret, paymentIntentId } = await response.json();
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+      // Initialize Payment Sheet
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'FirstSips',
+        paymentIntentClientSecret: clientSecret,
+        defaultBillingDetails: {
+          name: customerInfo.name,
+        },
+      });
 
-    const { clientSecret, paymentIntentId } = await response.json();
-    console.log('Response data:', { clientSecret, paymentIntentId });
+      if (initError) {
+        throw new Error(initError.message);
+      }
 
-    if (!clientSecret) {
-      throw new Error('No client secret received from server');
-    }
+      // Present Payment Sheet
+      const { error: presentError } = await presentPaymentSheet();
 
-    const { error: initError } = await initPaymentSheet({
-      merchantDisplayName: 'FirstSips',
-      paymentIntentClientSecret: clientSecret,  // This should be the exact string from the backend
-      defaultBillingDetails: {
-        name: '',
-      },
-    });
-    
-    console.log('Init Payment Sheet Response:', { initError });  // Add this log
-    
-    if (initError) {
-      console.log('Init Error Details:', initError);  // Add this log
-      throw new Error(initError.message);
-    }
-    
-    // Present Payment Sheet
-    console.log('Presenting payment sheet...');  // Add this log
-    const { error: presentError } = await presentPaymentSheet();
-    console.log('Present Sheet Response:', { presentError });  // Add this log
+      if (presentError) {
+        throw new Error(presentError.message);
+      }
 
-    if (presentError) {
-      throw new Error(presentError.message);
-    }
-
-    Alert.alert('Success', 'Payment completed!');
-    onSuccess(clientSecret);
+      // Create order in Firestore
+      const orderId = await createOrder(paymentIntentId);
+      
+      Alert.alert('Success', 'Payment completed!');
+      onSuccess({ orderId, clientSecret });
 
     } catch (error: any) {
       Alert.alert('Error', error.message);
       console.error('Payment Error:', error);
     } finally {
-      setLoading(false);
+      setIsProcessing(false);
     }
   };
 
