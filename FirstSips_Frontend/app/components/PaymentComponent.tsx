@@ -1,4 +1,4 @@
-import { View, Alert, StyleSheet, Platform } from 'react-native';
+import { View, Alert, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { useStripe } from '@stripe/stripe-react-native';
 import { Button } from 'react-native-paper';
@@ -12,61 +12,60 @@ const PaymentComponent = ({ amount, onSuccess }: PaymentComponentProps) => {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
 
-  // Update API URL with your actual IP address
-  const API_URL = Platform.select({
-    android: 'http://192.168.50.84:5000',  // Updated for Android
-    ios: 'http://192.168.50.84:5000',      // Updated for iOS
-    default: 'http://192.168.50.84:5000'   // Updated default
-  });
-
   const handlePayment = async () => {
-    try {
-      setLoading(true);
-      console.log('Making request to:', `${API_URL}/payments/create-payment-intent`); // Debug log
+  try {
+    setLoading(true);
+    console.log('Making request to:', `http://192.168.50.84:5000/payments/create-payment-intent`);
+    console.log('Amount being sent:', amount);
 
-      // 1. Create Payment Intent - Use API_URL instead of localhost
-      const response = await fetch(`${API_URL}/payments/create-payment-intent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: amount,
-          currency: 'usd',
-        }),
-      });
+    const response = await fetch(`http://192.168.50.84:5000/payments/create-payment-intent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: Math.round(amount),
+        currency: 'usd',
+      }),
+    });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-      const data = await response.json();
-      console.log('Response data:', data); // Debug log
+    const { clientSecret, paymentIntentId } = await response.json();
+    console.log('Response data:', { clientSecret, paymentIntentId });
 
-      const { clientSecret } = data;
+    if (!clientSecret) {
+      throw new Error('No client secret received from server');
+    }
 
-      // 2. Initialize Payment Sheet
-      const { error: initError } = await initPaymentSheet({
-        merchantDisplayName: 'FirstSips',
-        paymentIntentClientSecret: clientSecret,
-        defaultBillingDetails: {
-          name: '', // Can be populated if you have user data
-        }
-      });
+    const { error: initError } = await initPaymentSheet({
+      merchantDisplayName: 'FirstSips',
+      paymentIntentClientSecret: clientSecret,  // This should be the exact string from the backend
+      defaultBillingDetails: {
+        name: '',
+      },
+    });
+    
+    console.log('Init Payment Sheet Response:', { initError });  // Add this log
+    
+    if (initError) {
+      console.log('Init Error Details:', initError);  // Add this log
+      throw new Error(initError.message);
+    }
+    
+    // Present Payment Sheet
+    console.log('Presenting payment sheet...');  // Add this log
+    const { error: presentError } = await presentPaymentSheet();
+    console.log('Present Sheet Response:', { presentError });  // Add this log
 
-      if (initError) {
-        throw new Error(initError.message);
-      }
+    if (presentError) {
+      throw new Error(presentError.message);
+    }
 
-      // 3. Present Payment Sheet
-      const { error: presentError } = await presentPaymentSheet();
-
-      if (presentError) {
-        throw new Error(presentError.message);
-      }
-
-      Alert.alert('Success', 'Payment completed!');
-      onSuccess(clientSecret);
+    Alert.alert('Success', 'Payment completed!');
+    onSuccess(clientSecret);
 
     } catch (error: any) {
       Alert.alert('Error', error.message);
