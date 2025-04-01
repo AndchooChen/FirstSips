@@ -16,7 +16,6 @@ export default function EditShopScreen() {
     const [showNameModal, setShowNameModal] = useState(false);
     const [tempShopName, setTempShopName] = useState(shopName);
     const [items, setItems] = useState([]);
-
     const router = useRouter();
 
     const pickImage = async () => {
@@ -36,6 +35,29 @@ export default function EditShopScreen() {
         router.push("/(tabs)/dashboard/DashboardScreen");
     };
 
+    const handleOrderQueuePress = async () => {
+        const userId = FIREBASE_AUTH.currentUser?.uid;
+        if (!userId) {
+            alert('Not authenticated');
+            return;
+        }
+    
+        // Fetch the user's shop ID
+        const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
+        const shopId = userDoc.data()?.shopId;
+    
+        if (!shopId) {
+            alert('Shop not found');
+            return;
+        }
+    
+        // Navigate to OrderQueueScreen with the shopId
+        router.push({
+            pathname: '/(tabs)/shop_owner/OrderManagementScreen',
+            params: { shopId },
+        });
+    };
+
     const handleAddProduct = async () => {
         const userId = FIREBASE_AUTH.currentUser?.uid;
         if (!userId) {
@@ -48,11 +70,11 @@ export default function EditShopScreen() {
     
         if (!shopId) {
             alert('Please create a shop first');
-            router.push("/(tabs)/shop/CreateShopScreen");
+            router.push("/(tabs)/shop_owner/CreateShopScreen");
             return;
         }
     
-        router.push("/(tabs)/shop/AddItemScreen");
+        router.push("/(tabs)/shop_owner/AddItemScreen");
     };
 
     const handleSaveChanges = async () => {
@@ -119,7 +141,12 @@ export default function EditShopScreen() {
                 <TouchableOpacity onPress={handleHomePress}>
                     <Ionicons name="home" size={24} color="#6F4E37" />
                 </TouchableOpacity>
+
                 <Text style={styles.headerTitle}>Edit Shop</Text>
+
+                <TouchableOpacity onPress={handleOrderQueuePress} style={styles.queueButton}>
+                    <Ionicons name="list" size={24} color="#6F4E37" />
+                </TouchableOpacity>
             </View>
 
             {/* Profile Image Section */}
@@ -172,7 +199,7 @@ export default function EditShopScreen() {
                             }
                 
                             router.push({
-                                pathname: "/(tabs)/shop/EditItemScreen",
+                                pathname: "/(tabs)/shop_owner/EditItemScreen",
                                 params: { shopId: shopId, itemId: item.id }
                             });
                         }}
@@ -255,6 +282,11 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginLeft: 16,
         color: '#6F4E37',
+    },
+    queueButton: {
+        position: 'absolute',
+        right: 16,
+        padding: 8,
     },
     imageContainer: {
         alignItems: 'center',
