@@ -16,7 +16,6 @@ export default function EditShopScreen() {
     const [showNameModal, setShowNameModal] = useState(false);
     const [tempShopName, setTempShopName] = useState(shopName);
     const [items, setItems] = useState([]);
-
     const router = useRouter();
 
     const pickImage = async () => {
@@ -54,7 +53,7 @@ export default function EditShopScreen() {
     
         // Navigate to OrderQueueScreen with the shopId
         router.push({
-            pathname: '/(tabs)/shop_owner/OrderQueueScreen',
+            pathname: '/(tabs)/shop_owner/OrderManagementScreen',
             params: { shopId },
         });
     };

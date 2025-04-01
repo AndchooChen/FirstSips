@@ -25,11 +25,11 @@ interface PaymentComponentProps {
   shopId: string;
   customerInfo: {
     name: string;
-    phone: string;
-    pickupTime: Date;
-    isDelivery: boolean;
+    phoneNumber: string;
+    userId: string;
     address?: string;
   };
+  pickupTime: string;
   setIsProcessing: (isProcessing: boolean) => void;
 }
 
@@ -39,6 +39,7 @@ const PaymentComponent = ({
   cartItems, 
   shopId, 
   customerInfo,
+  pickupTime,
   setIsProcessing 
 }: PaymentComponentProps) => {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
@@ -49,18 +50,16 @@ const PaymentComponent = ({
       const orderRef = collection(FIREBASE_DB, 'orders');
       const newOrder = {
         shopId,
-        customerId: 'CURRENT_USER_ID', // Replace with actual user ID
+        customerId: customerInfo.userId,
         customerName: customerInfo.name,
-        customerPhone: customerInfo.phone,
+        customerPhone: customerInfo.phoneNumber,
         items: cartItems,
-        totalAmount: amount,
+        totalAmount: (amount / 100).toFixed(2),
         paymentIntentId,
         status: 'pending' as OrderStatus,
         createdAt: new Date(),
         updatedAt: new Date(),
-        pickupTime: customerInfo.pickupTime,
-        isDelivery: customerInfo.isDelivery,
-        deliveryAddress: customerInfo.isDelivery ? customerInfo.address : null,
+        pickupTime: pickupTime,
       };
 
       const docRef = await addDoc(orderRef, newOrder);

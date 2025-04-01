@@ -1,8 +1,8 @@
 import { View, StyleSheet, FlatList, ActivityIndicator, ScrollView } from 'react-native';
 import { Text, Card, Button, Portal, Dialog, RadioButton } from 'react-native-paper';
 import { useState, useEffect, useMemo } from 'react';
-import { FIREBASE_DB } from '../auth/FirebaseConfig';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { FIREBASE_AUTH, FIREBASE_DB } from '../auth/FirebaseConfig';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { Order, OrderStatus } from '../types/order';
 
 const OrderQueue = ({ shopId }: { shopId: string }) => {
@@ -20,19 +20,52 @@ const OrderQueue = ({ shopId }: { shopId: string }) => {
 
     const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
         try {
+            console.log("Attempting to update order...");
+            console.log("Shop ID:", shopId);
+            console.log("Current User ID:", FIREBASE_AUTH.currentUser?.uid);
+            console.log("Order ID:", orderId);
+            console.log("New Status:", newStatus);
+    
             const orderRef = doc(FIREBASE_DB, 'orders', orderId);
+            console.log("Firestore Order Reference Path:", orderRef.path);
+    
+            // Fetch the order document to confirm it exists and check its shopId
+            const orderSnapshot = await getDoc(orderRef);
+            if (!orderSnapshot.exists()) {
+                console.error("Order not found in Firestore.");
+                alert("Error: Order does not exist.");
+                return;
+            }
+    
+            const orderData = orderSnapshot.data();
+            console.log("Fetched Order Data:", orderData);
+    
+            // Ensure the order has a valid shopId
+            if (!orderData.shopId) {
+                console.error("Order document is missing shopId.");
+                alert("Error: Order is missing shopId.");
+                return;
+            }
+    
+            // Verify if the shopId matches the user's shopId
+            if (orderData.shopId !== shopId) {
+                console.error("Mismatch: Order's shopId does not match the user's shopId.");
+                alert("Error: You do not have permission to update this order.");
+                return;
+            }
+    
             await updateDoc(orderRef, {
                 status: newStatus,
                 updatedAt: new Date()
             });
     
-            // Optional: Send notification to customer
-            // await notifyCustomer(orderId, newStatus);
+            console.log("Order status successfully updated to:", newStatus);
         } catch (error) {
-            console.error('Error updating order:', error);
-            alert('Error: Failed to update order status');
+            console.error("Error updating order:", error);
+            alert("Error: Failed to update order status.");
         }
     };
+    
 
     const handleStatusUpdate = async () => {
         if (!selectedOrder) return;
@@ -71,7 +104,7 @@ const OrderQueue = ({ shopId }: { shopId: string }) => {
                     <Text variant="titleMedium">Order #{selectedOrder?.orderId.slice(-6)}</Text>
                     <Text variant="bodyMedium">Customer: {selectedOrder?.customerName}</Text>
                     <Text variant="bodyMedium">Phone: {selectedOrder?.customerPhone}</Text>
-                    <Text variant="bodyMedium">Pickup: {selectedOrder?.pickupTime.toLocaleTimeString()}</Text>
+                    <Text variant="bodyMedium">Pickup: {selectedOrder?.pickupTime}</Text>
                     
                     <Text variant="titleMedium" style={{ marginTop: 16 }}>Items:</Text>
                     {selectedOrder?.items.map((item, index) => (
@@ -107,7 +140,7 @@ const OrderQueue = ({ shopId }: { shopId: string }) => {
                     Status: {order.status}
                 </Text>
                 <Text variant="bodyMedium">
-                    Pickup: {order.pickupTime.toLocaleTimeString()}
+                    Pickup: {order.pickupTime}
                 </Text>
             </Card.Content>
             <Card.Actions>
@@ -143,7 +176,7 @@ const OrderQueue = ({ shopId }: { shopId: string }) => {
         const q = query(
             ordersRef,
             where('shopId', '==', shopId),
-            where('status', 'in', ['pending', 'accepted', 'preparing']),
+            where('status', 'in', ['pending', 'accepted', 'preparing', 'completed']),
             orderBy('createdAt', 'asc')
         );
 
@@ -153,7 +186,7 @@ const OrderQueue = ({ shopId }: { shopId: string }) => {
                 ...doc.data(),
                 orderId: doc.id,
                 createdAt: doc.data().createdAt?.toDate(),
-                pickupTime: doc.data().pickupTime?.toDate(),
+                pickupTime: doc.data().pickupTime,
             })) as Order[];
             setOrders(orderData);
             setLoading(false);
@@ -186,7 +219,7 @@ const OrderQueue = ({ shopId }: { shopId: string }) => {
                 <ActivityIndicator size="large" color="#6F4E37" />
             ) : (
                 <ScrollView>
-                    {['pending', 'accepted', 'preparing'].map((status) => (
+                    {['pending', 'accepted', 'preparing', 'completed'].map((status) => (
                         <View key={status} style={styles.section}>
                             <Text variant="titleMedium" style={styles.sectionTitle}>
                                 {status.toUpperCase()} ({groupedOrders[status]?.length || 0})

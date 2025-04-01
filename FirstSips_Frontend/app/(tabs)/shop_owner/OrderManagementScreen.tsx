@@ -6,8 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 const OrderQueueScreen = () => {
     const { shopId } = useLocalSearchParams();
-    const router = useRouter(); // Use Expo Router for navigation
-
+    const router = useRouter();
     return (
         <SafeAreaView style={styles.container}>
             <Appbar.Header>

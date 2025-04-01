@@ -51,6 +51,10 @@ export default function DashboardScreen() {
         }
     };
 
+    const handleOrderHistory = () => {
+        router.push('/(tabs)/shop_front/OrderHistoryScreen');
+    };
+
     const handleLogout = async () => {
         try {
             await FIREBASE_AUTH.signOut();
@@ -84,6 +88,12 @@ export default function DashboardScreen() {
                     textColor="#FFFFFF"
                     color="#D4A373"
                     onPress={handleShopAction}
+                />
+                <ScreenWideButton
+                    text="Order History"
+                    textColor="#FFFFFF"
+                    color="#6A8CAF"
+                    onPress={handleOrderHistory}
                 />
                 <ScreenWideButton
                     text="Logout"

@@ -23,7 +23,7 @@ export interface Order {
     
     createdAt: Date;
     updatedAt: Date;
-    pickupTime: Date;
+    pickupTime: string;
     
     isDelivery: boolean;
     deliveryAddress?: string;
