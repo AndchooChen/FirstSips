@@ -47,7 +47,7 @@ const SignUpScreen = () => {
             alert('Account created successfully');
 
             if (isShopOwner) {
-                router.push("../(tabs)/shop/CreateShopScreen");
+                router.push("../(tabs)/shop_owner/CreateShopScreen");
             } else {
                 router.push("../(tabs)/dashboard/DashboardScreen");
             }

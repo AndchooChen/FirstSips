@@ -1,15 +1,15 @@
 import { View, Text, StyleSheet, FlatList } from "react-native";
 import { useState, useEffect } from "react";
 import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
-import { collection, query, onSnapshot } from 'firebase/firestore';
-import { doc, getDoc } from 'firebase/firestore';
-import ShopCard from "../../components/ShopCard"
+import { collection, query, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import ShopCard from "../../components/ShopCard";
 import { useRouter } from "expo-router";
 import ScreenWideButton from "../../components/ScreenWideButton";
 
 export default function DashboardScreen() {
     const [hasShop, setHasShop] = useState(false);
     const [shops, setShops] = useState([]);
+    const [userShopId, setUserShopId] = useState(null);
     const router = useRouter();
 
     useEffect(() => {
@@ -20,31 +20,34 @@ export default function DashboardScreen() {
             const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
             const shopId = userDoc.data()?.shopId;
             setHasShop(!!shopId);
+            setUserShopId(shopId); // Store the user's shop ID
         };
 
         checkUserShop();
     }, []);
 
-    // Fetch all shops
     useEffect(() => {
         const shopsQuery = query(collection(FIREBASE_DB, 'shops'));
         
         const unsubscribe = onSnapshot(shopsQuery, (snapshot) => {
-            const shopsList = [];
+            let shopsList = [];
             snapshot.forEach((doc) => {
                 shopsList.push({ id: doc.id, ...doc.data() });
             });
-            setShops(shopsList);
+
+            // Filter out the user's own shop
+            const filteredShops = shopsList.filter(shop => shop.shopId !== userShopId);
+            setShops(filteredShops);
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [userShopId]); // Re-run when userShopId is set
 
     const handleShopAction = () => {
         if (hasShop) {
-            router.push("../shop/EditShopScreen");
+            router.push("../shop_owner/EditShopScreen");
         } else {
-            router.push("../shop/CreateShopScreen");
+            router.push("../shop_owner/CreateShopScreen");
         }
     };
 
@@ -55,14 +58,14 @@ export default function DashboardScreen() {
         } catch (error) {
             console.log(error);
         }
-    }
+    };
 
     const renderItem = ({ item }) => (
         <ShopCard
             name={item.shopName}
             description={item.description}
             onPress={() => router.push({
-                pathname: "../shop/ShopScreen",
+                pathname: "../shop_front/ShopScreen",
                 params: { 
                     shopId: item.shopId,
                     shopName: item.shopName,
@@ -70,7 +73,7 @@ export default function DashboardScreen() {
                 }
             })}
         />
-    )
+    );
 
     return (
         <View style={styles.background}>
@@ -105,7 +108,7 @@ const styles = StyleSheet.create({
     background: {
         backgroundColor: "#F5EDD8",
         flex: 1,
-        width: '100%', // Add this to ensure full width
+        width: '100%',
     },
     header: {
         marginTop: 40,
@@ -121,8 +124,8 @@ const styles = StyleSheet.create({
     },
     flatListContainer: {
         flexGrow: 1,
-        width: '100%', // Add this to ensure full width
+        width: '100%',
         alignItems: 'center',
         marginTop: 10,
     },
-})
+});
