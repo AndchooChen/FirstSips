@@ -71,7 +71,7 @@ const AddItemScreen = () => {
     
             alert('Product added successfully!');
             router.push({
-                pathname: "/(tabs)/shop/EditShopScreen",
+                pathname: "/(tabs)/shop_owner/EditShopScreen",
                 params: { shopId }
             });
         } catch (error) {
