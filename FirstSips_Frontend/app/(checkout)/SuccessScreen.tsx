@@ -9,7 +9,7 @@ import { doc, getDoc } from 'firebase/firestore';
 interface OrderDetails {
   orderId: string;
   customerName: string;
-  pickupTime: Date;
+  pickupTime: string;
   orderNumber: string;
   shopId: string;
   status: 'pending' | 'accepted' | 'preparing' | 'ready' | 'completed';
@@ -37,7 +37,7 @@ const SuccessScreen = () => {
           setOrderData({
             ...data,
             orderId: orderDoc.id,
-            pickupTime: data.pickupTime.toDate(),
+            pickupTime: data.pickupTime,
           } as OrderDetails);
 
           // Fetch shop data after getting order
@@ -83,7 +83,7 @@ const SuccessScreen = () => {
           <DetailRow 
             icon="time" 
             label="Pickup Time" 
-            value={orderData.pickupTime.toLocaleTimeString()} 
+            value={orderData.pickupTime} 
           />
           <DetailRow 
             icon="location" 
