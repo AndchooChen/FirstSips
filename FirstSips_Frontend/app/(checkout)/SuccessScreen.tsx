@@ -1,5 +1,5 @@
 import { View, StyleSheet, SafeAreaView } from 'react-native';
-import { Text, Button, Surface } from 'react-native-paper';
+import { Text, Button, Surface, ActivityIndicator } from 'react-native-paper';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
@@ -7,32 +7,67 @@ import { FIREBASE_DB } from "../auth/FirebaseConfig";
 import { doc, getDoc } from 'firebase/firestore';
 
 interface OrderDetails {
+  orderId: string;
+  customerName: string;
   pickupTime: string;
   orderNumber: string;
   shopId: string;
+  status: 'pending' | 'accepted' | 'preparing' | 'ready' | 'completed';
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+  }>;
+  totalAmount: number;
 }
+
 
 const SuccessScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const [orderData, setOrderData] = useState<OrderDetails | null>(null);
   const [shopData, setShopData] = useState<any>(null);
-  const orderDetails: OrderDetails = {
-    pickupTime: params.pickupTime as string,
-    orderNumber: `FS-${Date.now().toString().slice(-6)}`,
-    shopId: params.shopId as string,
-  };
 
   useEffect(() => {
-    const fetchShopData = async () => {
-      if (orderDetails.shopId) {
-        const shopDoc = await getDoc(doc(FIREBASE_DB, "shops", orderDetails.shopId));
-        if (shopDoc.exists()) {
-          setShopData(shopDoc.data());
+    const fetchOrderDetails = async () => {
+      if (params.orderId) {
+        const orderDoc = await getDoc(doc(FIREBASE_DB, "orders", params.orderId as string));
+        if (orderDoc.exists()) {
+          const data = orderDoc.data();
+          setOrderData({
+            ...data,
+            orderId: orderDoc.id,
+            pickupTime: data.pickupTime,
+          } as OrderDetails);
+
+          // Fetch shop data after getting order
+          const shopDoc = await getDoc(doc(FIREBASE_DB, "shops", data.shopId));
+          if (shopDoc.exists()) {
+            setShopData(shopDoc.data());
+          }
         }
       }
     };
-    fetchShopData();
-  }, [orderDetails.shopId]);
+    fetchOrderDetails();
+  }, [params.orderId]);
+
+  if (!orderData || !shopData) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator size="large" color="#6F4E37" />
+      </SafeAreaView>
+    );
+  }
+
+  const DetailRow = ({ icon, label, value }: { icon: string; label: string; value?: string }) => (
+    <View style={styles.detailRow}>
+      <Ionicons name={icon} size={24} color="#6F4E37" style={styles.detailIcon} />
+      <View style={styles.detailText}>
+        <Text style={styles.detailLabel}>{label}</Text>
+        <Text style={styles.detailValue}>{value || 'Loading...'}</Text>
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -48,27 +83,22 @@ const SuccessScreen = () => {
           <DetailRow 
             icon="time" 
             label="Pickup Time" 
-            value={orderDetails.pickupTime} 
+            value={orderData.pickupTime} 
           />
           <DetailRow 
             icon="location" 
             label="Pickup Location" 
-            value={shopData?.shopName} 
-          />
-          <DetailRow 
-            icon="map" 
-            label="Address" 
-            value={`${shopData?.streetAddress}, ${shopData?.city}`} 
-          />
-          <DetailRow 
-            icon="call" 
-            label="Shop Phone" 
-            value={shopData?.phoneNumber} 
+            value={shopData.shopName} 
           />
           <DetailRow 
             icon="receipt" 
             label="Order Number" 
-            value={orderDetails.orderNumber} 
+            value={`FS-${orderData.orderId.slice(-6)}`} 
+          />
+          <DetailRow 
+            icon="cash" 
+            label="Total Amount" 
+            value={`$${(orderData.totalAmount / 100).toFixed(2)}`} 
           />
         </View>
 
@@ -83,16 +113,6 @@ const SuccessScreen = () => {
     </SafeAreaView>
   );
 };
-
-const DetailRow = ({ icon, label, value }: { icon: string; label: string; value?: string }) => (
-  <View style={styles.detailRow}>
-    <Ionicons name={icon} size={24} color="#6F4E37" style={styles.detailIcon} />
-    <View style={styles.detailText}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value || 'Loading...'}</Text>
-    </View>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: {
