@@ -29,8 +29,8 @@ router.post('/create-onboarding-link', async (req, res) => {
     try {
         const accountLink = await stripe.accountLinks.create({
             account: accountId,
-            refresh_url: 'http://localhost:3000/retry-onboarding',
-            return_url: 'http://localhost:3000/dashboard',
+            refresh_url: 'http://192.168.50.84:5000/retry-onboarding',
+            return_url: 'myapp://app/(tabs)/shop_owner/EditShopScreen',
             type: 'account_onboarding',
         });
 

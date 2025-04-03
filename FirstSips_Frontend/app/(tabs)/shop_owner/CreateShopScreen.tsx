@@ -61,7 +61,7 @@ export default function CreateShopScreen() {
             });
 
             alert("Shop created successfully");
-            router.push("/(tabs)/shop_owner/EditShopScreen");
+            router.push("/(auth)/StripeConnectScreen");
         } catch (error: any) {
             console.error("error creating shop:", error);
             alert("Failed to create shop: " + error.message);
