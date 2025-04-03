@@ -16,7 +16,11 @@ router.post('/create-payment-intent', async (req, res) => {
       currency,
       automatic_payment_methods: {
         enabled: true,
-      }
+      },
+      payment_method_types: ['card'],
+      transfer_data: {
+          destination: shopOwnerStripeAccountId,
+      },
     });
 
     res.json({
@@ -29,42 +33,25 @@ router.post('/create-payment-intent', async (req, res) => {
   }
 });
 
-// Webhook handler
-router.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
+app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   try {
-    const event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+      const event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
 
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        const paymentIntent = event.data.object;
-        // Handle successful payment
-        console.log('Payment succeeded:', paymentIntent.id);
-        // TODO: Update order status in your database
-        break;
-      case 'payment_intent.payment_failed':
-        // Handle failed payment
-        console.log('Payment failed:', event.data.object.id);
-        break;
-    }
+      if (event.type === 'account.updated') {
+          const account = event.data.object;
+          console.log(`Account ${account.id} updated: charges_enabled=${account.charges_enabled}`);
+      }
 
-    res.json({ received: true });
-  } catch (err) {
-    console.error('Webhook Error:', err.message);
-    res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-});
+      if (event.type === 'payment_intent.succeeded') {
+          console.log('Payment successful:', event.data.object);
+      }
 
-// Get payment status
-router.get('/status/:paymentIntentId', async (req, res) => {
-  try {
-    const { paymentIntentId } = req.params;
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    res.json({ status: paymentIntent.status });
+      res.json({ received: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+      console.error('Webhook error:', error.message);
+      res.status(400).send(`Webhook Error: ${error.message}`);
   }
 });
 
