@@ -120,7 +120,7 @@ const SignUpScreen = () => {
                         secureTextEntry = {true}
                     />
                     <View style={styles.switchContainer}>
-                        <Text>I want to create a cofee shop</Text>
+                        <Text>I want to create a coffee shop</Text>
                         <Switch
                             value={isShopOwner}
                             onValueChange={setIsShopOwner}

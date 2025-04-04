@@ -5,18 +5,26 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "firstsips",
+    "deepLinks": [
+      {
+        "scheme": "firstsips",
+        "prefix": "firstsips://",
+        "paths": ["stripe-success", "stripe-error"]
+      }
+    ],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.andchoo.Brewly"
+      "bundleIdentifier": "com.firstsips.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.firstsips.app"
     },
     "web": {
       "bundler": "metro",
@@ -38,6 +46,13 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos"
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "FirstSips",
+          "enableGooglePay": true
         }
       ]
     ],

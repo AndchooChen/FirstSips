@@ -20,6 +20,25 @@ export default function EditItemScreen() {
     const router = useRouter();
 
     useEffect(() => {
+        const checkStripeAccountStatus = async () => {
+            const response = await fetch('http://192.168.50.84:5000/stripe/check-account-status', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            const data = await response.json();
+
+            if (data.chargesEnabled && data.payoutsEnabled) {
+                console.log("Stripe account fully set up!");
+            } else {
+                alert("Your Stripe account is not fully set up. Please complete onboarding.");
+                router.back();
+            }
+        };
+
+        checkStripeAccountStatus();
+    }, []);
+
+    useEffect(() => {
         const fetchItem = async () => {
             const itemDoc = await getDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`));
             if (itemDoc.exists()) {

@@ -98,7 +98,7 @@ export default function EditShopScreen() {
             await updateDoc(doc(FIREBASE_DB, "shops", shopId), {
                 shopName,
                 isOpen,
-                profileImage,
+                profileImage: profileImage || null,
                 updatedAt: new Date().toISOString()
             });
 

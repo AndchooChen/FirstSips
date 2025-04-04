@@ -1,72 +1,104 @@
-import { View, Text, StyleSheet, Image, TouchableOpacity, ImageSourcePropType } from "react-native";
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 
-type CustomShopProp = {
-    name: string;
-    onPress: () => void
+interface Shop {
+    shopName: string;
+    profileImage?: string;
+    isOpen: boolean;
     description?: string;
-    image?: ImageSourcePropType;
 }
 
-const ShopCard: React.FC<CustomShopProp> = ({
-    name,
-    onPress,
-    description,
-    image,
-}) => {
-    const defaultImage = require("../assets/images/stock_coffee.png");
+interface ShopCardProps {
+    shop: Shop;
+    onPress: () => void;
+}
 
+const ShopCard = ({ shop, onPress }: ShopCardProps) => {
     return (
-        <TouchableOpacity
-            style={styles.container}
-            activeOpacity={0.8}
-            onPress={onPress}
-        >
+        <TouchableOpacity style={styles.card} onPress={onPress}>
             <View style={styles.imageContainer}>
                 <Image
-                    source={image || defaultImage}
+                    source={
+                        shop.profileImage
+                            ? { uri: shop.profileImage }
+                            : require('../assets/images/stock_coffee.png')
+                    }
                     style={styles.image}
                 />
+                <View style={[
+                    styles.statusIndicator,
+                    { backgroundColor: shop.isOpen ? '#4CAF50' : '#F44336' }
+                ]} />
             </View>
-            <View style={styles.textContainer}>
-                <Text style={styles.title}>{name}</Text>
-                <Text style={styles.description}>{description}</Text>
+            <View style={styles.contentContainer}>
+                <Text style={styles.title}>{shop.shopName}</Text>
+                {shop.description && (
+                    <Text style={styles.description} numberOfLines={2}>
+                        {shop.description}
+                    </Text>
+                )}
+                <Text style={[
+                    styles.status,
+                    { color: shop.isOpen ? '#4CAF50' : '#F44336' }
+                ]}>
+                    {shop.isOpen ? 'Open' : 'Closed'}
+                </Text>
             </View>
         </TouchableOpacity>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        backgroundColor: "#654942",
-        borderRadius: 20,
-        overflow: 'hidden',
-        height: 280,
-        width: 360,
-        marginBottom: 15,
+    card: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        marginVertical: 8,
+        marginHorizontal: 16,
+        flexDirection: 'row',
+        padding: 12,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
     imageContainer: {
-        height: '70%',
-        width: '100%',
+        position: 'relative',
+        marginRight: 12,
     },
     image: {
-        width: '100%',
-        height: '100%',
-        resizeMode: 'cover',
+        width: 80,
+        height: 80,
+        borderRadius: 8,
     },
-    textContainer: {
-        padding: 12,
-        height: '30%',
+    statusIndicator: {
+        position: 'absolute',
+        bottom: -4,
+        right: -4,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+    },
+    contentContainer: {
+        flex: 1,
+        justifyContent: 'center',
     },
     title: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
-        color: '#FFFFFF',
+        color: '#6F4E37',
         marginBottom: 4,
     },
     description: {
         fontSize: 14,
-        color: '#FFFFFF',
-        opacity: 0.8,
+        color: '#666666',
+        marginBottom: 4,
+    },
+    status: {
+        fontSize: 14,
+        fontWeight: '500',
     },
 });
 

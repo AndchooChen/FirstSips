@@ -1,3 +1,10 @@
+# Dependencies
 node_modules/
+
+# Environment variables
 .env
+
+# Firebase service account
+src/config/serviceAccountKey.json
+
 .DS_Store
