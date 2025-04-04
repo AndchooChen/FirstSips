@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+require('./config/firebase-config'); // Initialize Firebase Admin
 const paymentRoutes = require('./routes/paymentRoutes');
 const stripeRoutes = require('./routes/stripeRoutes');
 

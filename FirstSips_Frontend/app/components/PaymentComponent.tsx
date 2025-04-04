@@ -5,6 +5,7 @@ import { Button } from 'react-native-paper';
 import { addDoc, collection } from 'firebase/firestore';
 import { FIREBASE_DB } from '../auth/FirebaseConfig';
 import { OrderStatus } from '../types/order';
+import { API_URL } from '../config/api';
 
 interface CartItem {
   id: string;
@@ -74,8 +75,9 @@ const PaymentComponent = ({
     try {
       setIsProcessing(true);
       
-      // Create Payment Intent
-      const response = await fetch(`http://192.168.50.84:5000/payments/create-payment-intent`, {
+      // Create Payment Intent using payment-sheet endpoint
+      console.log(`${API_URL}/payments/payment-sheet`);
+      const response = await fetch(`${API_URL}/payments/payment-sheet`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -83,15 +85,24 @@ const PaymentComponent = ({
         body: JSON.stringify({
           amount: Math.round(amount),
           currency: 'usd',
+          customerId: customerInfo.userId,
+          shopId
         }),
       });
 
-      const { clientSecret, paymentIntentId } = await response.json();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create payment');
+      }
+
+      const { paymentIntent, ephemeralKey, customer } = await response.json();
 
       // Initialize Payment Sheet
       const { error: initError } = await initPaymentSheet({
         merchantDisplayName: 'FirstSips',
-        paymentIntentClientSecret: clientSecret,
+        paymentIntentClientSecret: paymentIntent,
+        customerEphemeralKeySecret: ephemeralKey,
+        customerId: customer,
         defaultBillingDetails: {
           name: customerInfo.name,
         },
@@ -109,10 +120,10 @@ const PaymentComponent = ({
       }
 
       // Create order in Firestore
-      const orderId = await createOrder(paymentIntentId);
+      const orderId = await createOrder(paymentIntent);
       
       Alert.alert('Success', 'Payment completed!');
-      onSuccess({ orderId, clientSecret });
+      onSuccess({ orderId, clientSecret: paymentIntent });
 
     } catch (error: any) {
       Alert.alert('Error', error.message);

@@ -1,54 +1,61 @@
-import { View, Text, StyleSheet, FlatList } from "react-native";
-import { useState, useEffect } from "react";
-import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
-import { collection, query, onSnapshot, doc, getDoc } from 'firebase/firestore';
-import ShopCard from "../../components/ShopCard";
-import { useRouter } from "expo-router";
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { FIREBASE_AUTH, FIREBASE_DB } from '../../auth/FirebaseConfig';
+import { collection, query, getDocs } from 'firebase/firestore';
+import ShopCard from '../../components/ShopCard';
+import { useRouter } from 'expo-router';
 import ScreenWideButton from "../../components/ScreenWideButton";
 
-export default function DashboardScreen() {
-    const [hasShop, setHasShop] = useState(false);
-    const [shops, setShops] = useState([]);
-    const [userShopId, setUserShopId] = useState(null);
+interface Shop {
+    id: string;
+    shopName: string;
+    profileImage?: string;
+    isOpen: boolean;
+    [key: string]: any;
+}
+
+const DashboardScreen = () => {
+    const [openShops, setOpenShops] = useState<Shop[]>([]);
+    const [closedShops, setClosedShops] = useState<Shop[]>([]);
+    const [refreshing, setRefreshing] = useState(false);
     const router = useRouter();
 
-    useEffect(() => {
-        const checkUserShop = async () => {
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) return;
+    const fetchShops = async () => {
+        try {
+            const shopsQuery = query(collection(FIREBASE_DB, 'shops'));
+            const querySnapshot = await getDocs(shopsQuery);
+            
+            const openShopsList: Shop[] = [];
+            const closedShopsList: Shop[] = [];
 
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const shopId = userDoc.data()?.shopId;
-            setHasShop(!!shopId);
-            setUserShopId(shopId); // Store the user's shop ID
-        };
-
-        checkUserShop();
-    }, []);
-
-    useEffect(() => {
-        const shopsQuery = query(collection(FIREBASE_DB, 'shops'));
-        
-        const unsubscribe = onSnapshot(shopsQuery, (snapshot) => {
-            let shopsList = [];
-            snapshot.forEach((doc) => {
-                shopsList.push({ id: doc.id, ...doc.data() });
+            querySnapshot.forEach((doc) => {
+                const shopData = { id: doc.id, ...doc.data() } as Shop;
+                if (shopData.isOpen) {
+                    openShopsList.push(shopData);
+                } else {
+                    closedShopsList.push(shopData);
+                }
             });
 
-            // Filter out the user's own shop
-            const filteredShops = shopsList.filter(shop => shop.shopId !== userShopId);
-            setShops(filteredShops);
-        });
+            setOpenShops(openShopsList);
+            setClosedShops(closedShopsList);
+        } catch (error) {
+            console.error('Error fetching shops:', error);
+        }
+    };
 
-        return () => unsubscribe();
-    }, [userShopId]); // Re-run when userShopId is set
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchShops();
+        setRefreshing(false);
+    };
+
+    useEffect(() => {
+        fetchShops();
+    }, []);
 
     const handleShopAction = () => {
-        if (hasShop) {
-            router.push("../shop_owner/EditShopScreen");
-        } else {
-            router.push("../shop_owner/CreateShopScreen");
-        }
+        router.push("../shop_owner/EditShopScreen");
     };
 
     const handleOrderHistory = () => {
@@ -64,27 +71,17 @@ export default function DashboardScreen() {
         }
     };
 
-    const renderItem = ({ item }) => (
-        <ShopCard
-            name={item.shopName}
-            description={item.description}
-            onPress={() => router.push({
-                pathname: "../shop_front/ShopScreen",
-                params: { 
-                    shopId: item.shopId,
-                    shopName: item.shopName,
-                    shopDescription: item.description
-                }
-            })}
-        />
-    );
-
     return (
-        <View style={styles.background}>
+        <ScrollView 
+            style={styles.container}
+            refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+        >
             <Text style={styles.header}>FirstSips</Text>
             <View style={styles.buttonContainer}>
                 <ScreenWideButton
-                    text={hasShop ? "Edit Shop" : "Create Shop"}
+                    text="Edit Shop"
                     textColor="#FFFFFF"
                     color="#D4A373"
                     onPress={handleShopAction}
@@ -102,23 +99,51 @@ export default function DashboardScreen() {
                     onPress={handleLogout}
                 />
             </View>
-            <FlatList
-                data={shops}
-                renderItem={renderItem}
-                keyExtractor={item => item.shopId}
-                contentContainerStyle={styles.flatListContainer}
-                showsVerticalScrollIndicator={false}
-                horizontal={false}
-            />
-        </View>
+            {/* Open Shops Section */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Open Shops</Text>
+                {openShops.length === 0 ? (
+                    <Text style={styles.emptyText}>No open shops available</Text>
+                ) : (
+                    openShops.map((shop) => (
+                        <ShopCard
+                            key={shop.id}
+                            shop={shop}
+                            onPress={() => router.push({
+                                pathname: "/(tabs)/shop_front/OpenedShopScreen",
+                                params: { shopId: shop.id }
+                            })}
+                        />
+                    ))
+                )}
+            </View>
+
+            {/* Closed Shops Section */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Closed Shops</Text>
+                {closedShops.length === 0 ? (
+                    <Text style={styles.emptyText}>No closed shops</Text>
+                ) : (
+                    closedShops.map((shop) => (
+                        <ShopCard
+                            key={shop.id}
+                            shop={shop}
+                            onPress={() => router.push({
+                                pathname: "/(tabs)/shop_front/ClosedShopScreen",
+                                params: { shopId: shop.id }
+                            })}
+                        />
+                    ))
+                )}
+            </View>
+        </ScrollView>
     );
-}
+};
 
 const styles = StyleSheet.create({
-    background: {
-        backgroundColor: "#F5EDD8",
+    container: {
         flex: 1,
-        width: '100%',
+        backgroundColor: '#F5EDD8',
     },
     header: {
         marginTop: 40,
@@ -132,10 +157,20 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         marginBottom: 20,
     },
-    flatListContainer: {
-        flexGrow: 1,
-        width: '100%',
-        alignItems: 'center',
-        marginTop: 10,
+    section: {
+        padding: 16,
+    },
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 16,
+        color: '#6F4E37',
+    },
+    emptyText: {
+        textAlign: 'center',
+        color: '#666666',
+        marginTop: 8,
     },
 });
+
+export default DashboardScreen;

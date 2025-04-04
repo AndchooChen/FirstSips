@@ -1,21 +1,34 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
-import { TextInput, Switch, Divider, ActivityIndicator } from 'react-native-paper';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import { TextInput, Switch, Divider, ActivityIndicator, Button } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import PaymentComponent from '../components/PaymentComponent';
+import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
+import { useStripe } from '@stripe/stripe-react-native';
+import { API_URL } from '../config/api';
 
-type CartItem = {
+interface ShopData {
+    shopName: string;
+    streetAddress: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    ownerId: string;
+    phoneNumber?: string;
+    [key: string]: any;
+}
+
+interface CartItem {
     id: string;
     name: string;
     price: number;
     quantity: number;
     description?: string;
-};
+}
 
 const CheckoutScreen = () => {
+    const { initPaymentSheet, presentPaymentSheet } = useStripe();
     const [customerInfo, setCustomerInfo] = useState({
         name: '',
         phoneNumber: '',
@@ -24,81 +37,176 @@ const CheckoutScreen = () => {
     const [isDelivery, setIsDelivery] = useState(false);
     const [pickupTime, setPickupTime] = useState('');
     const [deliveryAddress, setDeliveryAddress] = useState('');
-    const [shopData, setShopData] = useState(null);
+    const [shopData, setShopData] = useState<ShopData | null>(null);
     const [loading, setLoading] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const router = useRouter();
     const params = useLocalSearchParams();
     const { items, shopId } = params;
 
-        // Parse cart items from params with type safety
-        const cartItems: CartItem[] = useMemo(() => {
-            try {
-                return JSON.parse(items as string || '[]');
-            } catch (error) {
-                console.error('Error parsing cart items:', error);
-                return [];
-            }
-        }, [items]);
-    
-            // Calculate totals with error handling
-        const totals = useMemo(() => {
-            const subtotal = cartItems.reduce((sum, item) => 
-                sum + (item.price * item.quantity), 0);
-            const tax = subtotal * 0.0825; // 8.25% tax
-            const deliveryFee = isDelivery ? 5.99 : 0;
-            const total = subtotal + tax + deliveryFee;
-
-            return {
-                subtotal,
-                tax,
-                deliveryFee,
-                total
-            };
-        }, [cartItems, isDelivery]);
-    
-
-    const handlePaymentSuccess = async (result: { orderId: string; clientSecret: string }) => {
+    // Parse cart items from params with type safety
+    const cartItems: CartItem[] = useMemo(() => {
         try {
-            // Log success and order details
-            console.log('Payment successful:', result);
-    
-            // Store order reference in customers's history
-            const userOrderRef = doc(FIREBASE_DB, 'users', customerInfo.userId, 'orders', result.orderId);
-            await setDoc(userOrderRef, { 
-                customerId: customerInfo.userId,
-                shopId: shopId,
-                createdAt: new Date(),
+            return JSON.parse(items as string || '[]');
+        } catch (error) {
+            console.error('Error parsing cart items:', error);
+            return [];
+        }
+    }, [items]);
+
+    // Calculate totals with error handling
+    const totals = useMemo(() => {
+        const subtotal = cartItems.reduce((sum, item) => 
+            sum + (item.price * item.quantity), 0);
+        const tax = subtotal * 0.0825; // 8.25% tax
+        const deliveryFee = isDelivery ? 5.99 : 0;
+        const total = subtotal + tax + deliveryFee;
+
+        return {
+            subtotal,
+            tax,
+            deliveryFee,
+            total
+        };
+    }, [cartItems, isDelivery]);
+
+    const fetchPaymentSheetParams = async () => {
+        const userId = FIREBASE_AUTH.currentUser?.uid;
+        if (!userId) {
+            throw new Error('User not authenticated');
+        }
+
+        console.log("Fetching payment sheet params");
+        const response = await fetch(`${API_URL}/payments/payment-sheet`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                amount: Math.round(totals.total * 100),
+                currency: 'usd',
+                customerId: userId,
+                shopId
+            }),
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Payment sheet error:', {
+                status: response.status,
+                statusText: response.statusText,
+                body: errorText
+            });
+            throw new Error(`Failed to fetch payment sheet: ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log("Payment sheet params:", data);
+
+        return {
+            paymentIntent: data.paymentIntent,
+            ephemeralKey: data.ephemeralKey,
+            customer: data.customer,
+        };
+    };
+
+    const initializePaymentSheet = async () => {
+        try {
+            console.log("Initializing payment sheet");
+            const {
+                paymentIntent,
+                ephemeralKey,
+                customer,
+            } = await fetchPaymentSheetParams();
+            console.log("Payment sheet params fetched");
+            const { error } = await initPaymentSheet({
+                merchantDisplayName: "FirstSips",
+                customerId: customer,
+                customerEphemeralKeySecret: ephemeralKey,
+                paymentIntentClientSecret: paymentIntent,
+                allowsDelayedPaymentMethods: true,
+                returnURL: 'firstsips://stripe-redirect',
+                defaultBillingDetails: {
+                    name: customerInfo?.name,
+                    phone: customerInfo?.phoneNumber,
+                }
             });
 
-            // Store order reference in shop's history
-            console.log(shopId)
-            const shopOrderRef = doc(FIREBASE_DB, 'shops', shopId, 'orders', result.orderId);
-            await setDoc(shopOrderRef, {
-                customerId: customerInfo.userId,
-                shopId: shopId,
-                createdAt: new Date(),
-            });
-    
-            // Navigate to success screen with order ID
-            router.push({
-                pathname: "/(checkout)/SuccessScreen",
-                params: { orderId: result.orderId }
-            });
+            if (error) {
+                Alert.alert('Error', error.message);
+            } else {
+                setLoading(true);
+            }
         } catch (error) {
-            console.error('Error handling payment success:', error);
-            alert('Error: Order was placed but there was an error saving it.');
+            console.error('Error initializing payment sheet:', error);
+            Alert.alert('Error', 'Unable to initialize payment');
         }
     };
 
-    const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = subtotal * 0.0825; // 8.25% tax
-    const deliveryFee = isDelivery ? 5.99 : 0;
-    const total = subtotal + tax + deliveryFee;
+    const handlePayment = async () => {
+        if (!loading) return;
+
+        try {
+            setIsProcessing(true);
+            const { error } = await presentPaymentSheet();
+
+            if (error) {
+                Alert.alert('Error', error.message);
+                return;
+            }
+
+            // Create order in Firestore
+            const orderRef = collection(FIREBASE_DB, 'orders');
+            const newOrder = {
+                shopId,
+                customerId: customerInfo.userId,
+                customerName: customerInfo.name,
+                customerPhone: customerInfo.phoneNumber,
+                items: cartItems,
+                totalAmount: totals.total.toFixed(2),
+                status: 'pending',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                pickupTime: pickupTime,
+            };
+
+            const docRef = await addDoc(orderRef, newOrder);
+
+            // Store order references
+            await Promise.all([
+                setDoc(doc(FIREBASE_DB, 'users', customerInfo.userId, 'orders', docRef.id), {
+                    customerId: customerInfo.userId,
+                    shopId: shopId,
+                    createdAt: new Date(),
+                }),
+                setDoc(doc(FIREBASE_DB, 'shops', shopId, 'orders', docRef.id), {
+                    customerId: customerInfo.userId,
+                    shopId: shopId,
+                    createdAt: new Date(),
+                })
+            ]);
+
+            Alert.alert('Success', 'Your order has been placed!');
+            router.push({
+                pathname: "/(checkout)/SuccessScreen",
+                params: { orderId: docRef.id }
+            });
+        } catch (error) {
+            console.error('Payment Error:', error);
+            Alert.alert('Error', 'Unable to process payment');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    useEffect(() => {
+        initializePaymentSheet();
+    }, [totals.total, shopId, customerInfo]);
 
     // Fetch user data
     useEffect(() => {
         const fetchUserData = async () => {
+            console.log("Fetching user data");
             const userId = FIREBASE_AUTH.currentUser?.uid; // Get the current user ID from Firebase Auth
             if (!userId) {
                 alert('User not authenticated');
@@ -143,13 +251,25 @@ const CheckoutScreen = () => {
     // Fetch shop data
     useEffect(() => {
         const fetchShopData = async () => {
-            if (!shopId) return; // If no shopId, don't fetch
+            if (!shopId) return;
 
             try {
-                const shopDoc = await getDoc(doc(FIREBASE_DB, 'shops', shopId));
+                const shopDoc = await getDoc(doc(FIREBASE_DB, 'shops', shopId as string));
 
                 if (shopDoc.exists()) {
-                    setShopData(shopDoc.data());
+                    const shopDataFromDB = shopDoc.data() as ShopData;
+                    
+                    // Fetch owner's data to get phone number
+                    const ownerDoc = await getDoc(doc(FIREBASE_DB, 'users', shopDataFromDB.ownerId));
+                    if (ownerDoc.exists()) {
+                        const ownerData = ownerDoc.data();
+                        setShopData({
+                            ...shopDataFromDB,
+                            phoneNumber: ownerData.phoneNumber || 'No phone number available'
+                        });
+                    } else {
+                        setShopData(shopDataFromDB);
+                    }
                 } else {
                     alert('Shop data not found');
                 }
@@ -160,7 +280,7 @@ const CheckoutScreen = () => {
         };
 
         fetchShopData();
-    }, [shopId]); // Runs every time the shopId changes
+    }, [shopId]);
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -266,19 +386,16 @@ const CheckoutScreen = () => {
                         <Text style={styles.loadingText}>Processing your order...</Text>
                     </View>
                 )}
-                {!isProcessing && totals && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Payment</Text>
-                        <PaymentComponent 
-                            amount={totals.total * 100}
-                            onSuccess={handlePaymentSuccess}
-                            cartItems={cartItems}
-                            shopId={shopId}
-                            pickupTime={pickupTime}
-                            customerInfo={customerInfo}
-                            setIsProcessing={setIsProcessing}
-                        />
-                    </View>
+                {!isProcessing && (
+                    <Button
+                        mode="contained"
+                        onPress={handlePayment}
+                        disabled={!loading}
+                        loading={isProcessing}
+                        style={styles.payButton}
+                    >
+                        Pay ${totals.total.toFixed(2)}
+                    </Button>
                 )}
             </ScrollView>
         </SafeAreaView>
@@ -401,6 +518,13 @@ const styles = StyleSheet.create({
         marginTop: 10,
         color: '#6F4E37',
         fontSize: 16,
+    },
+    payButton: {
+        backgroundColor: '#D4A373',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginVertical: 16,
     },
 });
 
