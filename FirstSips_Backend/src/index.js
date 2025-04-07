@@ -4,6 +4,9 @@ require('dotenv').config();
 require('./config/firebase-config'); // Initialize Firebase Admin
 const paymentRoutes = require('./routes/paymentRoutes');
 const stripeRoutes = require('./routes/stripeRoutes');
+const userRoutes = require('./routes/userRoutes');
+const shopRoutes = require('./routes/shopRoutes');
+const orderRoutes = require('./routes/orderRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,6 +24,11 @@ app.use('/payments', (req, res, next) => {
   req.domain = DOMAIN;
   next();
 }, paymentRoutes);
+
+// API Routes
+app.use('/api/users', userRoutes);
+app.use('/api/shops', shopRoutes);
+app.use('/api/orders', orderRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

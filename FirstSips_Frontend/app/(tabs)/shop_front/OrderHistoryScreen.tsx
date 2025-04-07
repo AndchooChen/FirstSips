@@ -1,174 +1,98 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
-import { FIREBASE_DB, FIREBASE_AUTH } from '../../auth/FirebaseConfig';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
-import { useRouter } from 'expo-router';
-import { Ionicons } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, FlatList, RefreshControl } from "react-native";
+import { orderService } from "../../services/orderService";
+import { shopService } from "../../services/shopService";
+import { useAuth } from "../../auth/AuthContext";
+import { Order } from "../../types/order";
+import { Shop } from "../../types/shop";
 
-interface Order {
-    id: string;
-    status: string;       // Order status
-    pickupTime: string;   // Pickup time (could be a string or Date depending on your data structure)
-    totalAmount: number;  // Total amount for the order
-}
-  
-interface Shop {
-    id: string;
-    name: string;
-    address: string;
-    phoneNumber: string;
+interface OrderWithShop extends Order {
+    shop?: Shop;
 }
 
 const OrderHistoryScreen = () => {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [orderDetails, setOrderDetails] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const user = FIREBASE_AUTH.currentUser;
-  const router = useRouter();
+    const [orders, setOrders] = useState<OrderWithShop[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const { user } = useAuth();
 
-  useEffect(() => {
-    const fetchOrderIds = async () => {
-        if (!user) {
-            console.log("No user found, exiting fetchOrders.");
-            return;
-        }
-    
+    const fetchOrders = async () => {
         try {
-            console.log("Fetching orders for user:", user.uid);
-    
-            const ordersRef = collection(FIREBASE_DB, `users/${user.uid}/orders`);
-            console.log("Orders collection reference:", ordersRef.path);
-    
-            console.log("Before order snapshots");
-            const orderSnapshots = await getDocs(ordersRef);
-            console.log("Fetched order snapshots:", orderSnapshots);
-    
-            const fetchedOrders: Order[] = [];
-    
-            if (orderSnapshots.empty) {
-                console.log("No orders found for this user.");
-            }
-    
-            // Extract order IDs
-            for (const orderDoc of orderSnapshots.docs) {
-                console.log("Processing order document:", orderDoc.id);
-                
-                // For now, we only push the ID into the fetchedOrders array.
-                fetchedOrders.push({ id: orderDoc.id } as Order);
-            }
-    
-            console.log("Final fetched orders:", fetchedOrders);
-            setOrders(fetchedOrders);
-    
-            // Now that we have the orders, pass them to fetchShopDetails.
-            fetchOrderDetails(fetchedOrders);
+            const fetchedOrders = await orderService.getUserOrders();
+            
+            // Fetch shop details for each order
+            const ordersWithShops = await Promise.all(
+                fetchedOrders.map(async (order) => {
+                    const shop = await shopService.getShop(order.shopId);
+                    return { ...order, shop };
+                })
+            );
+
+            setOrders(ordersWithShops);
         } catch (error) {
             console.error("Error fetching orders:", error);
         } finally {
             setLoading(false);
-            console.log("Order fetching completed.");
+            setRefreshing(false);
         }
     };
 
-    const fetchOrderDetails = async (orders: Order[]) => {
-        const ordersRef = collection(FIREBASE_DB, 'orders');
-        const shopRef = collection(FIREBASE_DB, 'shops');  // Reference to the shops collection
-        const orderIds = orders.map(order => order.id);
-        
-        try {
-            const fetchedOrderDetails: any[] = [];
-    
-            // Loop through the orderIds and fetch details for each order ID
-            for (const orderId of orderIds) {
-                const orderQuery = query(ordersRef, where('__name__', '==', orderId));
-    
-                const orderSnapshot = await getDocs(orderQuery);
-    
-                if (!orderSnapshot.empty) {
-                    orderSnapshot.forEach(async (orderDoc) => {
-                        const orderData = orderDoc.data();
-                        const { status, pickupTime, totalAmount, shopId } = orderData;
-                        console.log(shopId);
-    
-                        // Now, fetch shop details using the shopId
-                        const shopDoc = await getDoc(doc(shopRef, shopId));
-    
-                        if (shopDoc.exists()) {
-                            const shopData = shopDoc.data();
-                            console.log(shopData);
-                            // Combine order and shop details
-                            fetchedOrderDetails.push({
-                                id: orderId,
-                                status,
-                                pickupTime,
-                                totalAmount,
-                                shopId,
-                                shopName: shopData?.shopName || 'Loading...',
-                                address: shopData?.streetAddress || 'Loading...',
-                                phoneNumber: shopData?.phoneNumber || 'Loading...',
-                            });
-    
-                            // Optionally log the details
-                            console.log(`Order ID: ${orderId}`);
-                            console.log(`Status: ${status}`);
-                            console.log(`Pickup Time: ${pickupTime}`);
-                            console.log(`Total: $${totalAmount.toFixed(2)}`);
-                            console.log(`Shop Name: ${shopData?.name || 'Loading...'}`);
-                            console.log(`Address: ${shopData?.address || 'Loading...'}`);
-                            console.log(`Phone: ${shopData?.phoneNumber || 'Loading...'}`);
-                        } else {
-                            console.log(`No shop found with ID: ${shopId}`);
-                        }
-                    });
-                } else {
-                    console.log(`No order found with ID: ${orderId}`);
-                }
-            }
-    
-            // Update the state with the combined order and shop details
-            setOrderDetails(fetchedOrderDetails);
-    
-        } catch (error) {
-            console.error("Error fetching order and shop details:", error);
+    useEffect(() => {
+        if (user) {
+            fetchOrders();
         }
+    }, [user]);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchOrders();
     };
-    
 
-    fetchOrderIds();
-}, [user]);
-
-
-  if (loading) {
-    return <ActivityIndicator size="large" color="#0000ff" />;
-  }
-
-  return (
-        <View style={styles.container}>
-            {/* Header with Back Button */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={30} color="black" />
-                </TouchableOpacity>
-                <Text style={styles.headerText}>Order History</Text>
+    if (loading) {
+        return (
+            <View style={styles.container}>
+                <Text>Loading orders...</Text>
             </View>
+        );
+    }
 
-            {/* Order History List */}
+    if (orders.length === 0) {
+        return (
+            <View style={styles.container}>
+                <Text>No orders found</Text>
+            </View>
+        );
+    }
+
+    const renderOrderItem = ({ item }: { item: OrderWithShop }) => (
+        <View style={styles.orderCard}>
+            <Text style={styles.shopName}>{item.shop?.shopName || 'Unknown Shop'}</Text>
+            <Text style={styles.orderStatus}>Status: {item.status}</Text>
+            <Text style={styles.orderTotal}>Total: ${item.totalAmount.toFixed(2)}</Text>
+            <Text style={styles.pickupTime}>Pickup Time: {new Date(item.pickupTime).toLocaleString()}</Text>
+            <View style={styles.itemsList}>
+                {item.items.map((orderItem, index) => (
+                    <Text key={index} style={styles.itemText}>
+                        {orderItem.quantity}x {orderItem.name} - ${(orderItem.price * orderItem.quantity).toFixed(2)}
+                    </Text>
+                ))}
+            </View>
+        </View>
+    );
+
+    return (
+        <View style={styles.container}>
             <FlatList
-                data={orderDetails}
+                data={orders}
+                renderItem={renderOrderItem}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                    <View style={styles.orderItem}>
-                        <Text>Order Id: {item.id}</Text>
-                        <Text>Status: {item.status}</Text>
-                        <Text>Pickup Time: {item.pickupTime}</Text>
-                        <Text>Shop Name: {item.shopName}</Text>
-                        <Text>Address: {item.address}</Text>
-                        {/* Add Phone Number Later */}
-                        <Text>Phone: {item.phoneNumber}</Text>
-                        <Text>Total: ${item.totalAmount}</Text>
-                    </View>
-                )}
-                style={styles.flatList}
+                contentContainerStyle={styles.listContainer}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                    />
+                }
             />
         </View>
     );
@@ -176,30 +100,58 @@ const OrderHistoryScreen = () => {
 
 const styles = StyleSheet.create({
     container: {
-        flex: 1, // Take up full screen height
-        padding: 20,
+        flex: 1,
+        backgroundColor: '#FEFAE0',
+        padding: 16,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 20,
-        marginTop: 40,
+    listContainer: {
+        paddingBottom: 16,
     },
-    backButton: {
-        marginRight: 10,
+    orderCard: {
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
-    headerText: {
-        fontSize: 24,
+    shopName: {
+        fontSize: 18,
         fontWeight: 'bold',
+        marginBottom: 8,
+        color: '#6F4E37',
     },
-    flatList: {
-        flex: 1, // This makes the FlatList take the remaining space
+    orderStatus: {
+        fontSize: 16,
+        color: '#666',
+        marginBottom: 4,
     },
-    orderItem: {
-        padding: 15,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderRadius: 8,
+    orderTotal: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    pickupTime: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    itemsList: {
+        marginTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#eee',
+        paddingTop: 8,
+    },
+    itemText: {
+        fontSize: 14,
+        color: '#333',
+        marginBottom: 4,
     },
 });
 

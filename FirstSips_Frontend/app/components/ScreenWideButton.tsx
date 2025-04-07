@@ -6,6 +6,7 @@ type CustomButtonProp = {
     color?: string;
     textColor?: string;
     style?: ViewStyle;
+    disabled?: boolean;
 };
 
 const ScreenWideButton: React.FC<CustomButtonProp> = ({
@@ -14,14 +15,27 @@ const ScreenWideButton: React.FC<CustomButtonProp> = ({
     color = "#6F4E37", 
     textColor = "#FFFFFF", 
     style,
+    disabled = false,
 }) => {
     return (
         <TouchableOpacity
             onPress={onPress}
-            style={[styles.button, { backgroundColor: color }, style ]}
+            style={[
+                styles.button, 
+                { backgroundColor: color }, 
+                disabled && styles.disabled,
+                style
+            ]}
             activeOpacity={0.8}
+            disabled={disabled}
         >
-            <Text style={[styles.text, { color: textColor }]}>{text}</Text>
+            <Text style={[
+                styles.text, 
+                { color: textColor },
+                disabled && styles.disabledText
+            ]}>
+                {text}
+            </Text>
         </TouchableOpacity>
     )
 }
@@ -38,11 +52,17 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 5,
         elevation: 3,
-      },
-      text: {
+    },
+    text: {
         fontSize: 16,
         fontWeight: "600",
-      },
+    },
+    disabled: {
+        opacity: 0.5,
+    },
+    disabledText: {
+        opacity: 0.7,
+    }
 })
 
 export default ScreenWideButton;

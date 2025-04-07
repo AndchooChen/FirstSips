@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { TextInput, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { FIREBASE_DB, FIREBASE_AUTH } from '../../auth/FirebaseConfig';
-import { doc, collection, setDoc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../../auth/AuthContext';
+import { shopService } from '../../services/shopService';
 import ScreenWideButton from '../../components/ScreenWideButton';
 
 const AddItemScreen = () => {
@@ -15,8 +15,10 @@ const AddItemScreen = () => {
     const [price, setPrice] = useState('');
     const [quantity, setQuantity] = useState('');
     const [images, setImages] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
 
     const router = useRouter();
+    const { user } = useAuth();
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -31,69 +33,54 @@ const AddItemScreen = () => {
         }
     };
 
-    const handleAddItem = async () => {
+    const handleSubmit = async () => {
+        if (!user) {
+            alert('You must be logged in to add items');
+            return;
+        }
+
+        if (!name || !category || !description || !price || !quantity) {
+            alert('Please fill in all required fields');
+            return;
+        }
+
+        setLoading(true);
         try {
-            // Validate inputs
-            if (!name || !category || !description || !price || !quantity) {
-                alert('Please fill in all required fields');
-                return;
-            }
-    
-            // Get current user's shop ID
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) {
-                alert('Not authenticated');
-                return;
-            }
-    
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const shopId = userDoc.data()?.shopId;
-    
-            if (!shopId) {
-                alert('No shop found for this user');
-                return;
-            }
-    
-            // Create item in shop's items subcollection
-            const itemRef = doc(collection(FIREBASE_DB, `shops/${shopId}/items`));
-            
-            await setDoc(itemRef, {
-                itemId: itemRef.id,
-                shopId,
+            // TODO: Get the shopId from context or route params
+            const shopId = 'YOUR_SHOP_ID';
+            await shopService.addItem(shopId, {
                 name,
                 category,
                 description,
                 price: parseFloat(price),
-                quantity: parseInt(quantity),
-                images,
-                createdAt: new Date().toISOString()
+                quantity: parseInt(quantity, 10),
+                images
             });
-    
-            alert('Product added successfully!');
-            router.push({
-                pathname: "/(tabs)/shop_owner/EditShopScreen",
-                params: { shopId }
-            });
+
+            alert('Item added successfully');
+            router.back();
         } catch (error) {
-            console.error('Error adding product:', error);
-            alert('Failed to add product');
+            console.error('Error adding item:', error);
+            alert('Failed to add item. Please try again.');
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-        <ScrollView style={styles.background}>
-            <View style={styles.container}>
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={24} color="#6F4E37" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Add Product</Text>
-                </View>
+        <ScrollView style={styles.container}>
+            <TouchableOpacity 
+                style={styles.backButton}
+                onPress={() => router.back()}
+            >
+                <Ionicons name="arrow-back" size={24} color="#6F4E37" />
+            </TouchableOpacity>
 
-                {/* Product Info */}
+            <View style={styles.content}>
+                <Text style={styles.title}>Add New Item</Text>
+
                 <TextInput
-                    label="Product Name"
+                    label="Item Name"
                     value={name}
                     onChangeText={setName}
                     mode="outlined"
@@ -114,14 +101,14 @@ const AddItemScreen = () => {
                     onChangeText={setDescription}
                     mode="outlined"
                     multiline
-                    numberOfLines={4}
-                    style={[styles.input, styles.multilineInput]}
+                    numberOfLines={3}
+                    style={styles.input}
                 />
 
                 <TextInput
-                    label="Price ($)"
+                    label="Price"
                     value={price}
-                    onChangeText={setPrice}
+                    onChangeText={text => setPrice(text.replace(/[^0-9.]/g, ''))}
                     mode="outlined"
                     keyboardType="decimal-pad"
                     style={styles.input}
@@ -130,88 +117,85 @@ const AddItemScreen = () => {
                 <TextInput
                     label="Quantity"
                     value={quantity}
-                    onChangeText={setQuantity}
+                    onChangeText={text => setQuantity(text.replace(/[^0-9]/g, ''))}
                     mode="outlined"
                     keyboardType="number-pad"
                     style={styles.input}
                 />
 
-                {/* Image Section */}
-                <Text style={styles.sectionTitle}>Product Images</Text>
-                <View style={styles.imageContainer}>
-                    {images.map((uri, index) => (
-                        <Image key={index} source={{ uri }} style={styles.imagePreview} />
-                    ))}
-                    <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
-                        <Ionicons name="add-circle" size={24} color="#6F4E37" />
-                    </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={pickImage} style={styles.imageButton}>
+                    <Ionicons name="image" size={24} color="#6F4E37" />
+                    <Text style={styles.imageButtonText}>Add Images</Text>
+                </TouchableOpacity>
 
-                {/* Submit Button */}
+                <ScrollView horizontal style={styles.imagePreviewContainer}>
+                    {images.map((uri, index) => (
+                        <Image
+                            key={index}
+                            source={{ uri }}
+                            style={styles.imagePreview}
+                        />
+                    ))}
+                </ScrollView>
+
                 <ScreenWideButton
-                    text="Add Product"
-                    onPress={handleAddItem}  // Changed from handleCreateItem to handleAddItem
+                    text="Add Item"
+                    onPress={handleSubmit}
                     color="#D4A373"
-                    textColor="#FFFFFF"
+                    textColor="#000000"
+                    disabled={loading}
                 />
             </View>
         </ScrollView>
     );
-}
+};
 
 const styles = StyleSheet.create({
-    background: {
-        flex: 1,
-        backgroundColor: '#F5EDD8',
-    },
     container: {
-        padding: 16,
+        flex: 1,
+        backgroundColor: '#FEFAE0',
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 24,
-        paddingTop: 40,
+    content: {
+        padding: 20,
+        paddingTop: 60,
     },
-    headerTitle: {
+    backButton: {
+        position: 'absolute',
+        top: 50,
+        left: 20,
+        zIndex: 1,
+    },
+    title: {
         fontSize: 24,
         fontWeight: 'bold',
-        marginLeft: 16,
         color: '#6F4E37',
+        marginBottom: 20,
     },
     input: {
         marginBottom: 16,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'white',
     },
-    multilineInput: {
-        height: 100,
+    imageButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'white',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 16,
     },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 12,
+    imageButtonText: {
+        marginLeft: 8,
+        fontSize: 16,
         color: '#6F4E37',
     },
-    imageContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-        marginBottom: 24,
+    imagePreviewContainer: {
+        marginBottom: 16,
     },
     imagePreview: {
         width: 100,
         height: 100,
+        marginRight: 8,
         borderRadius: 8,
-    },
-    addImageButton: {
-        width: 100,
-        height: 100,
-        borderRadius: 8,
-        backgroundColor: '#FFFFFF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#6F4E37',
     },
 });
 

@@ -1,13 +1,13 @@
 import { View, StyleSheet, KeyboardAvoidingView, ScrollView, Platform, Text, TouchableOpacity } from "react-native";
 import { useState } from "react";
 import { TextInput, Switch } from 'react-native-paper';
-import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
+import { FIREBASE_AUTH } from "../auth/FirebaseConfig";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
 import { formatBirthday, formatPhoneNumber, validateForm } from "../utils/signUpUtils"
 import ScreenWideButton from "../components/ScreenWideButton";
 import { useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
+import { userService } from '../services/userService';
 
 const SignUpScreen = () => {
     const [firstName, setFirstName] = useState("");
@@ -17,6 +17,7 @@ const SignUpScreen = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isShopOwner, setIsShopOwner] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const router = useRouter();
     const auth = FIREBASE_AUTH;
@@ -26,24 +27,21 @@ const SignUpScreen = () => {
             return;
         }
 
+        setLoading(true);
         try {
-            const userCrediential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCrediential.user;
-
-            // Create user document with shop owner status
-            await setDoc(doc(FIREBASE_DB, "users", user.uid), {
+            // First create the Firebase auth user
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            
+            // Then create the user profile in our backend
+            await userService.updateProfile({
                 firstName,
                 lastName,
                 email,
                 phoneNumber,
                 birthday,
-                isShopOwner,
-                createdAt: new Date().toISOString(),
-                shopId: null,
+                isShopOwner
             });
 
-            // Check to see if the correct user is signed up
-            console.log(userCrediential);
             alert('Account created successfully');
 
             if (isShopOwner) {
@@ -51,15 +49,15 @@ const SignUpScreen = () => {
             } else {
                 router.push("../(tabs)/dashboard/DashboardScreen");
             }
-        }
-        catch (error: any) {
+        } catch (error: any) {
             alert('Sign up failed: ' + error.message);
-            console.log(error);
+            console.error(error);
+        } finally {
+            setLoading(false);
         }
     }
 
     return (
-        
         <KeyboardAvoidingView 
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.background}
@@ -71,29 +69,26 @@ const SignUpScreen = () => {
             >
                 <Ionicons name="arrow-back" size={24} color="#6F4E37" />
             </TouchableOpacity>
-            <ScrollView 
-                contentContainerStyle={styles.scrollContainer}
-                showsVerticalScrollIndicator={false}
-            >
-                <View style={styles.formContainer}>
+
+            <ScrollView>
+                <View style={styles.container}>
                     <TextInput 
-                        label = "First name"
-                        value = {firstName}
-                        onChangeText = {(firstName) => {setFirstName(firstName)}}
-                        mode = "outlined"
+                        label="First Name"
+                        value={firstName}
+                        onChangeText={(text) => setFirstName(text)}
+                        mode="outlined"
                     />
                     <TextInput 
-                        label = "Last name"
-                        value = {lastName}
-                        onChangeText = {(lastName) => {setLastName(lastName)}}
-                        mode = "outlined"
+                        label="Last Name"
+                        value={lastName}
+                        onChangeText={(text) => setLastName(text)}
+                        mode="outlined"
                     />
                     <TextInput 
-                        label="Phone number"
+                        label="Phone Number"
                         value={phoneNumber}
                         onChangeText={(text) => setPhoneNumber(formatPhoneNumber(text))}
                         mode="outlined"
-                        placeholder="(XXX)XXX-XXXX"
                         keyboardType="numeric"
                         maxLength={14}
                     />
@@ -107,17 +102,17 @@ const SignUpScreen = () => {
                         maxLength={10}
                     />
                     <TextInput 
-                        label = "Email"
-                        value = {email}
-                        onChangeText = {(email) => {setEmail(email)}}
-                        mode = "outlined"
+                        label="Email"
+                        value={email}
+                        onChangeText={(email) => setEmail(email)}
+                        mode="outlined"
                     />
                     <TextInput 
-                        label = "Password"
-                        value = {password}
-                        onChangeText = {(password) => {setPassword(password)}}
-                        mode = "outlined"
-                        secureTextEntry = {true}
+                        label="Password"
+                        value={password}
+                        onChangeText={(password) => setPassword(password)}
+                        mode="outlined"
+                        secureTextEntry={true}
                     />
                     <View style={styles.switchContainer}>
                         <Text>I want to create a coffee shop</Text>
@@ -131,6 +126,7 @@ const SignUpScreen = () => {
                         onPress={signUp}
                         color="#D4A373"
                         textColor="#000000"
+                        disabled={loading}
                     />
                 </View>
             </ScrollView>
@@ -141,34 +137,24 @@ const SignUpScreen = () => {
 const styles = StyleSheet.create({
     background: {
         flex: 1,
-        backgroundColor: "#F5EDD8",
-        justifyContent:"center",
+        backgroundColor: '#FEFAE0',
     },
-    scrollContainer: {
-        flexGrow: 1,
-        justifyContent: 'center',
-        padding: 16,
+    container: {
+        padding: 20,
+        gap: 10,
     },
-    formContainer: {
-        width: '100%',
-        gap: 12,
+    backButton: {
+        position: 'absolute',
+        top: 50,
+        left: 20,
+        zIndex: 1,
     },
     switchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 8,
-    },
-    input: {
-        marginBottom: 8,
-    },
-    backButton: {
-        position: 'absolute',
-        top: 40,
-        left: 16,
-        padding: 8,
-        zIndex: 1
+        marginVertical: 10,
     }
-})
+});
 
 export default SignUpScreen;

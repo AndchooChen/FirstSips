@@ -1,22 +1,64 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { useState, useEffect } from 'react';
 import { Switch, TextInput, Portal, Modal } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenWideButton from '../../components/ScreenWideButton';
 import * as ImagePicker from 'expo-image-picker';
-import { FIREBASE_AUTH, FIREBASE_DB } from '../../auth/FirebaseConfig';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { useAuth } from '../../auth/AuthContext';
+import { shopService } from '../../services/shopService';
 import { useRouter } from "expo-router";
-import { collection, query, onSnapshot } from 'firebase/firestore';
+import { Shop, ShopItem } from '../../types/shop';
 
 export default function EditShopScreen() {
-    const [shopName, setShopName] = useState("My Coffee Shop");
+    const [shop, setShop] = useState<Shop | null>(null);
     const [isOpen, setIsOpen] = useState(false);
-    const [profileImage, setProfileImage] = useState<string | null>(null);
+    const [profileImage, setProfileImage] = useState<string | undefined>(undefined);
     const [showNameModal, setShowNameModal] = useState(false);
-    const [tempShopName, setTempShopName] = useState(shopName);
-    const [items, setItems] = useState([]);
+    const [tempShopName, setTempShopName] = useState('');
+    const [items, setItems] = useState<ShopItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    const { user } = useAuth();
     const router = useRouter();
+
+    useEffect(() => {
+        fetchShopData();
+    }, []);
+
+    const fetchShopData = async () => {
+        if (!user) {
+            alert('Not authenticated');
+            router.push('/(auth)/LoginScreen');
+            return;
+        }
+
+        try {
+            // For now, we'll assume the user has only one shop
+            const shops = await shopService.getAllShops();
+            const userShop = shops.find(shop => shop.ownerId === user.uid);
+            
+            if (!userShop) {
+                alert('No shop found');
+                router.push('/(tabs)/shop_owner/CreateShopScreen');
+                return;
+            }
+
+            setShop(userShop);
+            setIsOpen(userShop.isOpen);
+            setProfileImage(userShop.profileImage);
+            setTempShopName(userShop.shopName);
+
+            // Fetch shop items
+            const shopItems = await shopService.getShopItems(userShop.id);
+            setItems(shopItems);
+        } catch (error) {
+            console.error('Error fetching shop data:', error);
+            alert('Failed to load shop data');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -35,70 +77,41 @@ export default function EditShopScreen() {
         router.push("/(tabs)/dashboard/DashboardScreen");
     };
 
-    const handleOrderQueuePress = async () => {
-        const userId = FIREBASE_AUTH.currentUser?.uid;
-        if (!userId) {
-            alert('Not authenticated');
-            return;
-        }
-    
-        // Fetch the user's shop ID
-        const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-        const shopId = userDoc.data()?.shopId;
-    
-        if (!shopId) {
-            alert('Shop not found');
-            return;
-        }
-    
-        // Navigate to OrderQueueScreen with the shopId
+    const handleOrderQueuePress = () => {
+        if (!shop) return;
         router.push({
             pathname: '/(tabs)/shop_owner/OrderManagementScreen',
-            params: { shopId },
+            params: { shopId: shop.id }
         });
     };
 
-    const handleAddProduct = async () => {
-        const userId = FIREBASE_AUTH.currentUser?.uid;
-        if (!userId) {
-            alert('Not authenticated');
-            return;
-        }
-    
-        const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-        const shopId = userDoc.data()?.shopId;
-    
-        if (!shopId) {
+    const handleAddProduct = () => {
+        if (!shop) {
             alert('Please create a shop first');
             router.push("/(tabs)/shop_owner/CreateShopScreen");
             return;
         }
-    
+        
         router.push("/(tabs)/shop_owner/AddItemScreen");
     };
 
     const handleSaveChanges = async () => {
+        if (!shop) return;
+
+        setSaving(true);
         try {
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) {
-                alert('Not authenticated');
-                return;
-            }
-
-            // Get user's shop ID
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const shopId = userDoc.data()?.shopId;
-
-            if (!shopId) {
-                alert('No shop found');
-                return;
-            }
-
-            // Update shop document
-            await updateDoc(doc(FIREBASE_DB, "shops", shopId), {
-                shopName,
+            await shopService.updateShop(shop.id, {
+                shopName: tempShopName,
                 isOpen,
-                profileImage: profileImage || null,
+                profileImage,
+                updatedAt: new Date().toISOString()
+            });
+
+            setShop({
+                ...shop,
+                shopName: tempShopName,
+                isOpen,
+                profileImage,
                 updatedAt: new Date().toISOString()
             });
 
@@ -107,36 +120,44 @@ export default function EditShopScreen() {
         } catch (error) {
             console.error('Error updating shop:', error);
             alert('Failed to update shop');
+        } finally {
+            setSaving(false);
         }
     };
 
-    useEffect(() => {
-        const fetchItems = async () => {
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) return;
+    const handleEditItem = (item: ShopItem) => {
+        if (!shop) return;
+        
+        router.push({
+            pathname: "/(tabs)/shop_owner/EditItemScreen",
+            params: { shopId: shop.id, itemId: item.id }
+        });
+    };
 
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const shopId = userDoc.data()?.shopId;
-            if (!shopId) return;
+    if (loading) {
+        return (
+            <View style={styles.background}>
+                <Text style={styles.loadingText}>Loading shop data...</Text>
+            </View>
+        );
+    }
 
-            const itemsQuery = query(collection(FIREBASE_DB, `shops/${shopId}/items`));
-            
-            const unsubscribe = onSnapshot(itemsQuery, (snapshot) => {
-                const itemsList = [];
-                snapshot.forEach((doc) => {
-                    itemsList.push({ id: doc.id, ...doc.data() });
-                });
-                setItems(itemsList);
-            });
-
-            return () => unsubscribe();
-        };
-
-        fetchItems();
-    }, []);
+    if (!shop) {
+        return (
+            <View style={styles.background}>
+                <Text style={styles.errorText}>Shop not found</Text>
+                <ScreenWideButton
+                    text="Create Shop"
+                    onPress={() => router.push("/(tabs)/shop_owner/CreateShopScreen")}
+                    color="#D4A373"
+                    textColor="#000000"
+                />
+            </View>
+        );
+    }
 
     return (
-        <View style={styles.background}>
+        <ScrollView style={styles.background}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleHomePress}>
                     <Ionicons name="home" size={24} color="#6F4E37" />
@@ -150,7 +171,7 @@ export default function EditShopScreen() {
             </View>
 
             {/* Profile Image Section */}
-            <TouchableOpacity style={styles.imageContainer} onPress={pickImage}>
+            <TouchableOpacity style={styles.imageContainer} onPress={pickImage} disabled={saving}>
                 {profileImage ? (
                     <Image source={{ uri: profileImage }} style={styles.profileImage} />
                 ) : (
@@ -162,8 +183,8 @@ export default function EditShopScreen() {
 
             {/* Shop Name Section */}
             <View style={styles.nameContainer}>
-                <Text style={styles.shopName}>{shopName}</Text>
-                <TouchableOpacity onPress={() => setShowNameModal(true)}>
+                <Text style={styles.shopName}>{shop.shopName}</Text>
+                <TouchableOpacity onPress={() => setShowNameModal(true)} disabled={saving}>
                     <Ionicons name="pencil" size={24} color="#6F4E37" />
                 </TouchableOpacity>
             </View>
@@ -175,57 +196,52 @@ export default function EditShopScreen() {
                     value={isOpen}
                     onValueChange={setIsOpen}
                     color="#D4A373"
+                    disabled={saving}
                 />
             </View>
 
             {/* Products List */}
-            <Text style={styles.sectionTitle}>Products</Text>
-            <View style={styles.productsList}>
-                {items.map((item) => (
-                    <TouchableOpacity 
-                        key={item.id} 
-                        style={styles.productCard}
-                        onPress={async () => {
-                            const userId = FIREBASE_AUTH.currentUser?.uid;
-                            if (!userId) return;
-                            
-                            // Fetch user document
-                            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-                            const shopId = userDoc.data()?.shopId;
-                            
-                            if (!shopId) {
-                                alert('Shop not found');
-                                return;
-                            }
-                
-                            router.push({
-                                pathname: "/(tabs)/shop_owner/EditItemScreen",
-                                params: { shopId: shopId, itemId: item.id }
-                            });
-                        }}
-                    >
-                        <Image 
-                            source={
-                                item.images?.[0] 
-                                    ? { uri: item.images[0] }
-                                    : require('../../assets/images/no_item_image.png')
-                            }
-                            style={styles.productImage}
-                            defaultSource={require('../../assets/images/no_item_image.png')}
-                        />
-                        <View style={styles.productInfo}>
-                            <Text style={styles.productName}>{item.name}</Text>
-                            <Text style={styles.productPrice}>${item.price}</Text>
-                        </View>
-                    </TouchableOpacity>
-                ))}
+            <View style={styles.productsHeader}>
+                <Text style={styles.sectionTitle}>Products</Text>
+                <TouchableOpacity onPress={handleAddProduct} disabled={saving}>
+                    <Ionicons name="add-circle" size={24} color="#6F4E37" />
+                </TouchableOpacity>
             </View>
 
-            {/* Add Product Button */}
-            <TouchableOpacity style={styles.addProductButton} onPress={() => {handleAddProduct()}}>
-                <Ionicons name="add-circle" size={32} color="#D4A373" />
-                <Text style={styles.addProductText}>Add New Product</Text>
-            </TouchableOpacity>
+            <View style={styles.productsList}>
+                {items.length === 0 ? (
+                    <Text style={styles.noProductsText}>No products added yet</Text>
+                ) : (
+                    items.map((item) => (
+                        <TouchableOpacity 
+                            key={item.id} 
+                            style={styles.productCard}
+                            onPress={() => handleEditItem(item)}
+                            disabled={saving}
+                        >
+                            {item.images && item.images[0] && (
+                                <Image source={{ uri: item.images[0] }} style={styles.productImage} />
+                            )}
+                            <View style={styles.productInfo}>
+                                <Text style={styles.productName}>{item.name}</Text>
+                                <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={24} color="#6F4E37" />
+                        </TouchableOpacity>
+                    ))
+                )}
+            </View>
+
+            {/* Save Changes Button */}
+            <View style={styles.buttonContainer}>
+                <ScreenWideButton
+                    text={saving ? "Saving..." : "Save Changes"}
+                    onPress={handleSaveChanges}
+                    color="#D4A373"
+                    textColor="#000000"
+                    disabled={saving}
+                />
+            </View>
 
             {/* Shop Name Edit Modal */}
             <Portal>
@@ -234,6 +250,7 @@ export default function EditShopScreen() {
                     onDismiss={() => setShowNameModal(false)}
                     contentContainerStyle={styles.modal}
                 >
+                    <Text style={styles.modalTitle}>Edit Shop Name</Text>
                     <TextInput
                         label="Shop Name"
                         value={tempShopName}
@@ -241,56 +258,58 @@ export default function EditShopScreen() {
                         mode="outlined"
                         style={styles.modalInput}
                     />
-                    <ScreenWideButton
-                        text="Save"
-                        onPress={() => {
-                            setShopName(tempShopName);
-                            setShowNameModal(false);
-                        }}
-                        color="#D4A373"
-                        textColor="#FFFFFF"
-                    />
+                    <View style={styles.modalButtons}>
+                        <ScreenWideButton
+                            text="Cancel"
+                            onPress={() => {
+                                setTempShopName(shop.shopName);
+                                setShowNameModal(false);
+                            }}
+                            color="#CCCCCC"
+                            textColor="#000000"
+                        />
+                        <ScreenWideButton
+                            text="Save"
+                            onPress={() => {
+                                if (tempShopName.trim()) {
+                                    setShowNameModal(false);
+                                } else {
+                                    alert('Shop name cannot be empty');
+                                }
+                            }}
+                            color="#D4A373"
+                            textColor="#000000"
+                        />
+                    </View>
                 </Modal>
             </Portal>
-
-            <View style={styles.saveButtonContainer}>
-                <ScreenWideButton
-                    text="Confirm Edits"
-                    onPress={handleSaveChanges}
-                    color="#D4A373"
-                    textColor="#FFFFFF"
-                />
-            </View>
-        </View>
+        </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
     background: {
-        backgroundColor: "#F5EDD8",
         flex: 1,
-        padding: 16,
+        backgroundColor: "#F5EDD8",
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 24,
-        paddingTop: 40,
+        justifyContent: 'space-between',
+        padding: 16,
+        paddingTop: 48,
     },
     headerTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        marginLeft: 16,
         color: '#6F4E37',
     },
     queueButton: {
-        position: 'absolute',
-        right: 16,
         padding: 8,
     },
     imageContainer: {
         alignItems: 'center',
-        marginTop: 32,
+        marginVertical: 16,
     },
     profileImage: {
         width: 120,
@@ -301,60 +320,61 @@ const styles = StyleSheet.create({
         width: 120,
         height: 120,
         borderRadius: 60,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#E9EDC9',
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#6F4E37',
     },
     nameContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 16,
         gap: 8,
+        marginBottom: 16,
     },
     shopName: {
-        fontSize: 24,
-        fontWeight: 'bold',
+        fontSize: 20,
+        fontWeight: '600',
         color: '#6F4E37',
     },
     statusContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#FFFFFF',
-        padding: 16,
-        borderRadius: 8,
-        marginTop: 24,
+        paddingHorizontal: 16,
+        marginBottom: 24,
     },
     statusText: {
         fontSize: 16,
         color: '#6F4E37',
     },
+    productsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        marginBottom: 16,
+    },
     sectionTitle: {
         fontSize: 18,
-        fontWeight: 'bold',
+        fontWeight: '600',
         color: '#6F4E37',
-        marginTop: 20,
-        marginBottom: 10,
-        paddingHorizontal: 10,
     },
     productsList: {
-        marginTop: 16,
+        paddingHorizontal: 16,
         gap: 12,
     },
     productCard: {
         flexDirection: 'row',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 8,
-        padding: 12,
         alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        padding: 12,
+        borderRadius: 8,
+        elevation: 2,
     },
     productImage: {
-        width: 60,
-        height: 60,
-        borderRadius: 4,
+        width: 50,
+        height: 50,
+        borderRadius: 8,
         marginRight: 12,
     },
     productInfo: {
@@ -367,21 +387,11 @@ const styles = StyleSheet.create({
     },
     productPrice: {
         fontSize: 14,
-        color: '#6F4E37',
-        marginTop: 4,
+        color: '#666666',
     },
-    addProductButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
+    buttonContainer: {
         padding: 16,
-        borderRadius: 8,
         marginTop: 16,
-        gap: 8,
-    },
-    addProductText: {
-        fontSize: 16,
-        color: '#6F4E37',
     },
     modal: {
         backgroundColor: 'white',
@@ -389,13 +399,37 @@ const styles = StyleSheet.create({
         margin: 20,
         borderRadius: 8,
     },
-    modalInput: {
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#6F4E37',
         marginBottom: 16,
     },
-    saveButtonContainer: {
-        position: 'absolute',
-        bottom: 20,
-        left: 16,
-        right: 16,
-    }
+    modalInput: {
+        marginBottom: 16,
+        backgroundColor: 'white',
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    loadingText: {
+        textAlign: 'center',
+        marginTop: 24,
+        fontSize: 16,
+        color: '#6F4E37',
+    },
+    errorText: {
+        textAlign: 'center',
+        marginTop: 24,
+        marginBottom: 16,
+        fontSize: 16,
+        color: '#6F4E37',
+    },
+    noProductsText: {
+        textAlign: 'center',
+        fontSize: 16,
+        color: '#666666',
+        marginTop: 24,
+    },
 });

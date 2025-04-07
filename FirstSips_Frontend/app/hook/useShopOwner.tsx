@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FIREBASE_DB } from '../auth/FirebaseConfig';
-import { doc, getDoc } from  'firebase/firestore';
+import { userService } from '../services/userService';
 
 export const useShopOwner = (userID: string) => {
     const [isShopOwner, setIsShopOwner] = useState(false);
@@ -9,10 +8,8 @@ export const useShopOwner = (userID: string) => {
     useEffect(() => {
         const checkShopOwner = async () => {
             try {
-                const userDoc = await getDoc(doc(FIREBASE_DB, "users", userID));
-                if (userDoc.exists()) {
-                    setIsShopOwner(userDoc.data().isShopOwner);
-                }
+                const { isShopOwner: ownerStatus } = await userService.checkShopOwner();
+                setIsShopOwner(ownerStatus);
             } catch (error) {
                 console.error("Error checking shop owner status: ", error);
             } finally {
@@ -23,7 +20,7 @@ export const useShopOwner = (userID: string) => {
         if (userID) {
             checkShopOwner();
         }
-    }, [userID])
+    }, [userID]);
 
     return { isShopOwner, loading };
 };

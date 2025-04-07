@@ -15,20 +15,18 @@ const LoginScreen = () => {
     const auth = FIREBASE_AUTH;
 
     const signIn = async () => {
+        if (!email || !password) {
+            alert('Please enter both email and password');
+            return;
+        }
+
         setLoading(true);
         try {
-            const userCrediential = await signInWithEmailAndPassword(auth, email, password);
-
-            // Check to see if the correct user is signed in
-            console.log(userCrediential);
-
-            setLoading(false);
-            router.push("../(tabs)/dashboard/DashboardScreen");
-        }
-        catch (error: any) {
+            await signInWithEmailAndPassword(auth, email, password);
+            router.push("/(tabs)/dashboard/DashboardScreen");
+        } catch (error: any) {
             setLoading(false);
             alert('Login failed: ' + error.message);
-            //console.log(error);
         }
     }
     
@@ -42,13 +40,14 @@ const LoginScreen = () => {
                 <Ionicons name="arrow-back" size={24} color="#6F4E37" />
             </TouchableOpacity>
             <View>
-                <KeyboardAvoidingView>
+                <KeyboardAvoidingView style={styles.container}>
                     
                     <TextInput
                         label="Email"
                         value={email}
                         onChangeText={(email) => setEmail(email)}
                         mode="outlined"
+                        style={styles.input}
                     />
                     <TextInput
                         label="Password"
@@ -56,16 +55,18 @@ const LoginScreen = () => {
                         onChangeText={(password) => setPassword(password)}
                         mode="outlined"
                         secureTextEntry={true}
+                        style={styles.input}
                     />
                     <ScreenWideButton
                         text="Login"
                         onPress={signIn}
                         color="#D4A373"
                         textColor="#000000"
+                        disabled={loading}
                     />
                     <ScreenWideButton
                         text="Sign up here"
-                        onPress={() => router.push("./SignUpScreen")}
+                        onPress={() => router.push("/(auth)/SignUpScreen")}
                         color="#D4A373"
                         textColor="#000000"
                     />
@@ -87,6 +88,15 @@ const styles = StyleSheet.create({
         left: 16,
         padding: 8,
         zIndex: 1
+    },
+    container: {
+        flex: 1,
+        padding: 20,
+        justifyContent: 'center',
+        gap: 10,
+    },
+    input: {
+        backgroundColor: 'white',
     }
 })
 

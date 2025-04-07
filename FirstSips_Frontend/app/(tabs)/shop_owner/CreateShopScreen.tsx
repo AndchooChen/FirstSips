@@ -3,22 +3,24 @@ import { useState } from 'react';
 import { TextInput } from "react-native-paper";
 import { SelectList } from 'react-native-dropdown-select-list';
 import { Ionicons } from "@expo/vector-icons";
-import { doc, setDoc, collection, updateDoc } from "firebase/firestore";
-import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
+import { useAuth } from "../../auth/AuthContext";
+import { shopService } from "../../services/shopService";
 import ScreenWideButton from "../../components/ScreenWideButton";
 import { useRouter } from "expo-router";
 
 export default function CreateShopScreen() {
     const [shopName, setShopName] = useState("");
     const [description, setDescription] = useState("");
-
     const [streetAddress, setStreetAddress] = useState("");
     const [optional, setOptional] = useState("");
     const [zipCode, setZipCode] = useState("");
     const [city, setCity] = useState("");
     const [state, setState] = useState("");
-
     const [deliveryMethod, setDeliveryMethod] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const { user } = useAuth();
+    const router = useRouter();
 
     const deliveryOptions = [
         { label: "Pickup", value: "pickup" },
@@ -26,45 +28,69 @@ export default function CreateShopScreen() {
         { label: "Pickup and Delivery", value: "both" }
     ];
 
-    const router = useRouter();
+    const validateForm = () => {
+        if (!shopName.trim()) {
+            alert("Please enter a shop name");
+            return false;
+        }
+        if (!description.trim()) {
+            alert("Please enter a description");
+            return false;
+        }
+        if (!streetAddress.trim()) {
+            alert("Please enter a street address");
+            return false;
+        }
+        if (!zipCode.trim()) {
+            alert("Please enter a ZIP code");
+            return false;
+        }
+        if (!city.trim()) {
+            alert("Please enter a city");
+            return false;
+        }
+        if (!state.trim()) {
+            alert("Please enter a state");
+            return false;
+        }
+        if (!deliveryMethod) {
+            alert("Please select a delivery method");
+            return false;
+        }
+        return true;
+    };
 
     const handleCreateShop = async () => {
+        if (!user) {
+            alert("No authenticated user found");
+            return;
+        }
+
+        if (!validateForm()) {
+            return;
+        }
+
+        setLoading(true);
         try {
+            const location = `${streetAddress}${optional ? `, ${optional}` : ''}, ${city}, ${state} ${zipCode}`;
             
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) {
-                alert("No authenticated user found");
-                return;
-            }
-
-            // Create a new shop document with auto-generated ID
-            const shopRef = doc(collection(FIREBASE_DB, "shops"));
-            const shopId = shopRef.id;
-
-            await setDoc(shopRef, {
-                shopId,
-                ownerId: userId,
+            await shopService.createShop({
                 shopName,
                 description,
-                streetAddress,
-                optional,
-                city,
-                state,
-                zipCode,
+                location,
                 deliveryMethod,
-                createdAt: new Date().toISOString()
-            });
-
-            // Update user's document with the shop ID
-            await updateDoc(doc(FIREBASE_DB, "users", userId), {
-                shopId
+                profileImage: undefined, // Optional profile image can be added later
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             });
 
             alert("Shop created successfully");
             router.push("/(auth)/StripeConnectScreen");
         } catch (error: any) {
-            console.error("error creating shop:", error);
+            console.error("Error creating shop:", error);
             alert("Failed to create shop: " + error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -84,77 +110,87 @@ export default function CreateShopScreen() {
 
                 {/* Shop Info Section */}
                 <Text style={styles.sectionTitle}>Shop</Text>
-            <View style={styles.shopContainer}>
-                <TextInput
-                    style={styles.input}
-                    label="Shop Name"
-                    value={shopName}
-                    onChangeText={shopName => setShopName(shopName)}
-                    mode="outlined"
-                />
-                <TextInput
-                    style={[styles.input, styles.multilineInput]}
-                    label="Description"
-                    value={description}
-                    onChangeText={description => setDescription(description)}
-                    mode="outlined"
-                    multiline
-                    numberOfLines={3}
-                />
-            </View>
-            {/* Address Section */}
-            <Text style={styles.sectionTitle}>Address</Text>
-            <View style={styles.addressContainer}>
-                <TextInput
-                    label="Street Address"
-                    value={streetAddress}
-                    onChangeText={streetAddress => setStreetAddress(streetAddress)}
-                    mode="outlined"
-                    style={styles.input}
-                />
-                <TextInput
-                    label="Apt/Suite/Other (optional)"
-                    value={optional}
-                    onChangeText={optional => setOptional(optional)}
-                    mode="outlined"
-                    style={styles.input}
-                />
-                <TextInput
-                    label="ZIP Code"
-                    value={zipCode}
-                    onChangeText={zipCode => setZipCode(zipCode)}
-                    mode="outlined"
-                    style={styles.input}
-                />
-                <TextInput
-                    label="City"
-                    value={city}
-                    onChangeText={city => setCity(city)}
-                    mode="outlined"
-                    style={styles.input}
-                />
-                <TextInput
-                    label="State"
-                    value={state}
-                    onChangeText={state => setState(state)}
-                    mode="outlined"
-                    style={styles.input}
-                />
-            </View>
+                <View style={styles.shopContainer}>
+                    <TextInput
+                        style={styles.input}
+                        label="Shop Name"
+                        value={shopName}
+                        onChangeText={setShopName}
+                        mode="outlined"
+                        disabled={loading}
+                    />
+                    <TextInput
+                        style={[styles.input, styles.multilineInput]}
+                        label="Description"
+                        value={description}
+                        onChangeText={setDescription}
+                        mode="outlined"
+                        multiline
+                        numberOfLines={3}
+                        disabled={loading}
+                    />
+                </View>
+
+                {/* Address Section */}
+                <Text style={styles.sectionTitle}>Address</Text>
+                <View style={styles.addressContainer}>
+                    <TextInput
+                        label="Street Address"
+                        value={streetAddress}
+                        onChangeText={setStreetAddress}
+                        mode="outlined"
+                        style={styles.input}
+                        disabled={loading}
+                    />
+                    <TextInput
+                        label="Apt/Suite/Other (optional)"
+                        value={optional}
+                        onChangeText={setOptional}
+                        mode="outlined"
+                        style={styles.input}
+                        disabled={loading}
+                    />
+                    <TextInput
+                        label="ZIP Code"
+                        value={zipCode}
+                        onChangeText={zipCode => setZipCode(zipCode.replace(/[^0-9]/g, ''))}
+                        mode="outlined"
+                        style={styles.input}
+                        keyboardType="numeric"
+                        disabled={loading}
+                    />
+                    <TextInput
+                        label="City"
+                        value={city}
+                        onChangeText={setCity}
+                        mode="outlined"
+                        style={styles.input}
+                        disabled={loading}
+                    />
+                    <TextInput
+                        label="State"
+                        value={state}
+                        onChangeText={setState}
+                        mode="outlined"
+                        style={styles.input}
+                        disabled={loading}
+                    />
+                </View>
             
-            {/* Delivery Method Section */}
-            <Text style={styles.sectionTitle}>Delivery Options</Text>
+                {/* Delivery Method Section */}
+                <Text style={styles.sectionTitle}>Delivery Options</Text>
                 <View style={styles.deliveryContainer}>
                     <SelectList
                         setSelected={setDeliveryMethod}
-                        data={deliveryOptions}
-                        save="key"
-                        placeholder="Select delivery method"
+                        data={loading ? [] : deliveryOptions}
+                        save="value"
+                        placeholder={loading ? "Loading..." : "Select delivery method"}
                         boxStyles={{
                             backgroundColor: '#FFFFFF',
                             borderRadius: 4,
                             borderWidth: 1,
                             borderColor: '#6F4E37',
+                            opacity: loading ? 0.5 : 1,
                         }}
                         inputStyles={{
                             color: '#6F4E37',
@@ -166,19 +202,21 @@ export default function CreateShopScreen() {
                         dropdownTextStyles={{
                             color: '#6F4E37',
                         }}
+                        search={false}
                     />
                 </View>
             
-            {/* Create Button */}
-            <View style={styles.buttonContainer}>
-                <ScreenWideButton
-                    text="Create Shop"
-                    onPress={handleCreateShop}
-                    color="#D4A373"
-                    textColor="#FFFFFF"
-                />
+                {/* Create Button */}
+                <View style={styles.buttonContainer}>
+                    <ScreenWideButton
+                        text={loading ? "Creating Shop..." : "Create Shop"}
+                        onPress={handleCreateShop}
+                        color="#D4A373"
+                        textColor="#FFFFFF"
+                        disabled={loading}
+                    />
+                </View>
             </View>
-        </View>
         </ScrollView>
     );
 }
@@ -204,34 +242,32 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        marginLeft: 16,
         color: '#6F4E37',
+        marginLeft: 16,
     },
     sectionTitle: {
         fontSize: 18,
         fontWeight: '600',
-        marginBottom: 12,
         color: '#6F4E37',
+        marginBottom: 16,
     },
     shopContainer: {
         marginBottom: 24,
     },
     addressContainer: {
         marginBottom: 24,
-        gap: 12,
     },
     deliveryContainer: {
-        marginBottom: 24,
+        marginBottom: 32,
     },
     input: {
-        marginBottom: 12,
-        backgroundColor: '#FFFFFF',
+        marginBottom: 16,
+        backgroundColor: 'white',
     },
     multilineInput: {
         height: 100,
     },
     buttonContainer: {
-        marginTop: 24,
-        marginBottom: 40,
-    }
+        marginBottom: 32,
+    },
 });

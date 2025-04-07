@@ -2,8 +2,8 @@ import { View, Alert, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { useStripe } from '@stripe/stripe-react-native';
 import { Button } from 'react-native-paper';
-import { doc, updateDoc } from 'firebase/firestore';
-import { FIREBASE_DB, FIREBASE_AUTH } from '../auth/FirebaseConfig';
+import { useAuth } from '../auth/AuthContext';
+import { userService } from '../services/userService';
 import React from 'react';
 
 interface StripeConnectComponentProps {
@@ -14,36 +14,42 @@ interface StripeConnectComponentProps {
 const StripeConnectComponent = ({ onSuccess, setIsProcessing }: StripeConnectComponentProps) => {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
 
   const handleStripeConnect = async () => {
+    if (!user) {
+      Alert.alert('Error', 'Please log in to connect your Stripe account');
+      return;
+    }
+
+    if (loading) return;
+
     try {
       setIsProcessing(true);
       setLoading(true);
       
-      const userId = FIREBASE_AUTH.currentUser?.uid;
-      if (!userId) {
-        throw new Error('User not found');
-      }
-
-      // Create Payment Intent for setup
-      const response = await fetch('http://192.168.50.84:5000/stripe/create-payment-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          setup: true
-        }),
-      });
-
-      const { clientSecret } = await response.json();
+      // Initiate Stripe Connect process
+      const { clientSecret, accountId } = await userService.initiateStripeConnect();
 
       // Initialize Payment Sheet
       const { error: initError } = await initPaymentSheet({
         merchantDisplayName: 'FirstSips',
         paymentIntentClientSecret: clientSecret,
         allowsDelayedPaymentMethods: true,
+        style: 'automatic',
+        appearance: {
+          colors: {
+            primary: '#6F4E37',
+            background: '#FEFAE0',
+            componentBackground: '#FFFFFF',
+            componentBorder: '#D4A373',
+            componentDivider: '#E9EDC9',
+            primaryText: '#6F4E37',
+            secondaryText: '#666666',
+            componentText: '#000000',
+            icon: '#6F4E37',
+          },
+        },
       });
 
       if (initError) {
@@ -57,16 +63,21 @@ const StripeConnectComponent = ({ onSuccess, setIsProcessing }: StripeConnectCom
         throw new Error(presentError.message);
       }
 
-      // Update user's Stripe status
-      await updateDoc(doc(FIREBASE_DB, 'users', userId), {
-        stripeConnected: true
-      });
+      // Complete Stripe Connect process
+      await userService.completeStripeConnect();
 
-      Alert.alert('Success', 'Stripe account connected successfully!');
-      onSuccess();
+      Alert.alert(
+        'Success',
+        'Your Stripe account has been connected successfully! You can now start receiving payments.',
+        [{ text: 'OK', onPress: onSuccess }]
+      );
 
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      Alert.alert(
+        'Connection Failed',
+        error.message || 'Failed to connect your Stripe account. Please try again.',
+        [{ text: 'OK' }]
+      );
       console.error('Stripe Connect Error:', error);
     } finally {
       setLoading(false);
@@ -81,9 +92,10 @@ const StripeConnectComponent = ({ onSuccess, setIsProcessing }: StripeConnectCom
         onPress={handleStripeConnect}
         loading={loading}
         disabled={loading}
-        style={styles.button}
+        style={[styles.button, loading && styles.buttonDisabled]}
+        labelStyle={styles.buttonLabel}
       >
-        Connect Stripe Account
+        {loading ? 'Connecting...' : 'Connect Stripe Account'}
       </Button>
     </View>
   );
@@ -92,10 +104,21 @@ const StripeConnectComponent = ({ onSuccess, setIsProcessing }: StripeConnectCom
 const styles = StyleSheet.create({
   container: {
     width: '100%',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   button: {
     padding: 8,
     backgroundColor: '#6F4E37',
+    borderRadius: 8,
+  },
+  buttonDisabled: {
+    backgroundColor: '#A89B91',
+  },
+  buttonLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    paddingVertical: 4,
   }
 });
 

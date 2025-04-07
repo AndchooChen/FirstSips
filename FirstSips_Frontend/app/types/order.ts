@@ -1,37 +1,25 @@
 export interface OrderItem {
     id: string;
     name: string;
-    quantity: number;
     price: number;
-    specialInstructions?: string;
+    quantity: number;
+    options?: {
+        size?: string;
+        extras?: string[];
+    };
+    notes?: string;
 }
 
 export interface Order {
-    orderId: string;
-    customerId: string;
+    id: string;
+    userId: string;
     shopId: string;
     items: OrderItem[];
-    
-    customerPhone: string;
-    customerName: string;
-    
     totalAmount: number;
-    paymentStatus: 'pending' | 'completed' | 'failed';
-    paymentIntentId: string;
-    
     status: 'pending' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'cancelled';
-    
-    createdAt: Date;
-    updatedAt: Date;
     pickupTime: string;
-    
-    isDelivery: boolean;
-    deliveryAddress?: string;
-    deliveryInstructions?: string;
-    
-    estimatedPrepTime: number;
-    acceptedBy?: string;
-    notes?: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'cancelled';
