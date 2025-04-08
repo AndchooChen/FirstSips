@@ -16,7 +16,7 @@ export default function Landing() {
       </View>
       <View style={styles.bottomContainer}>
         <View style={styles.whiteBackground}>
-          <Text style={styles.getStartedText}>Get Started</Text>
+          <Text style={styles.welcomeText}>Welcome!</Text>
           <ScreenWideButton
             text="Login"
             onPress={() => router.push("../(auth)/LoginScreen")}
@@ -24,13 +24,9 @@ export default function Landing() {
             textColor="#000000"
           />
 
-          <View style={{ alignItems: "center" }}>
-            <Text>or</Text>
-          </View>
-
           <ScreenWideButton
             text="Create an account"
-            onPress={() => router.push("../(auth)/SignUpScreen")}
+            onPress={() => router.push("../(auth)/AccountTypeScreen")}
             color="#D4A373"
             textColor="#000000"
           />
@@ -67,12 +63,13 @@ const styles = StyleSheet.create({
     width: "100%",
     padding: 32,
     gap: 20,
-    height: "70%",
+    height: "64%",
   },
-  getStartedText: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 24,
+  welcomeText: {
+    fontSize: 30,
+    fontWeight: 500,
+    marginBottom: 10,
+    marginTop: 20,
     textAlign: "center",
   }
 });

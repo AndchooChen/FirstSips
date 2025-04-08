@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, Button, ActivityIndicator, Alert, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { FIREBASE_DB, FIREBASE_AUTH } from '../auth/FirebaseConfig';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { API_URL } from '../config/api';
+import ScreenWideButton from '../components/ScreenWideButton';
+import { Ionicons } from '@expo/vector-icons';
 
 const StripeConnectScreen = () => {
     const [loading, setLoading] = useState(false);
@@ -133,17 +135,39 @@ const StripeConnectScreen = () => {
     }, []);
 
     return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: "#F5EDD8" }}>
+            <TouchableOpacity 
+                style={styles.backButton}
+                onPress={() => router.back()}
+            >
+                <Ionicons name="arrow-back" size={24} color="#6F4E37" />
+            </TouchableOpacity>
             <Text style={{ fontSize: 18, textAlign: 'center', marginBottom: 20 }}>
                 To receive payments, you need to set up a Stripe account.
             </Text>
             {loading ? (
                 <ActivityIndicator size="large" color="#007AFF" />
             ) : (
-                <Button title="Connect with Stripe" onPress={handleStripeOnboarding} />
+                <ScreenWideButton
+                    text="Connect with Stripe"
+                    onPress={handleStripeOnboarding}
+                    color="#D4A373"
+                    textColor="#000000"
+                    style={{width: "85%"}}
+                ></ScreenWideButton>
             )}
         </View>
     );
 };
+
+const styles = StyleSheet.create({
+    backButton: {
+        position: 'absolute',
+        top: 40,
+        left: 16,
+        padding: 8,
+        zIndex: 1
+    },
+})
 
 export default StripeConnectScreen;

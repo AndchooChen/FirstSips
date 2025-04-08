@@ -144,6 +144,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F5EDD8',
+        width: "100%",
     },
     header: {
         marginTop: 40,
@@ -159,6 +160,7 @@ const styles = StyleSheet.create({
     },
     section: {
         padding: 16,
+        width: "100%",
     },
     sectionTitle: {
         fontSize: 20,

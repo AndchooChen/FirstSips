@@ -1,4 +1,4 @@
-import { View, StyleSheet, KeyboardAvoidingView, TouchableOpacity } from "react-native";
+import {View, StyleSheet, KeyboardAvoidingView, TouchableOpacity, Platform, ScrollView } from "react-native";
 import { useState } from "react";
 import ScreenWideButton from "../components/ScreenWideButton";
 import { useRouter } from "expo-router";
@@ -17,45 +17,45 @@ const LoginScreen = () => {
     const signIn = async () => {
         setLoading(true);
         try {
-            const userCrediential = await signInWithEmailAndPassword(auth, email, password);
-
-            // Check to see if the correct user is signed in
-            console.log(userCrediential);
-
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            console.log(userCredential);
             setLoading(false);
             router.push("../(tabs)/dashboard/DashboardScreen");
-        }
-        catch (error: any) {
+        } catch (error: any) {
             setLoading(false);
             alert('Login failed: ' + error.message);
-            //console.log(error);
         }
-    }
-    
+    };
+
     return (
-        <View style={styles.background}>
-            {/* Add Back Button */}
-            <TouchableOpacity 
-                style={styles.backButton}
-                onPress={() => router.back()}
-            >
-                <Ionicons name="arrow-back" size={24} color="#6F4E37" />
-            </TouchableOpacity>
-            <View>
-                <KeyboardAvoidingView>
-                    
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+        >
+            <ScrollView contentContainerStyle={styles.scrollContainer}>
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => router.back()}
+                >
+                    <Ionicons name="arrow-back" size={24} color="#6F4E37" />
+                </TouchableOpacity>
+
+                <View style={styles.form}>
                     <TextInput
                         label="Email"
                         value={email}
-                        onChangeText={(email) => setEmail(email)}
+                        onChangeText={setEmail}
                         mode="outlined"
+                        style={styles.input}
                     />
                     <TextInput
                         label="Password"
                         value={password}
-                        onChangeText={(password) => setPassword(password)}
+                        onChangeText={setPassword}
                         mode="outlined"
-                        secureTextEntry={true}
+                        secureTextEntry
+                        style={styles.input}
                     />
                     <ScreenWideButton
                         text="Login"
@@ -63,31 +63,46 @@ const LoginScreen = () => {
                         color="#D4A373"
                         textColor="#000000"
                     />
+                    <View style={{ height: 10 }} />
                     <ScreenWideButton
-                        text="Sign up here"
-                        onPress={() => router.push("./SignUpScreen")}
+                        text="Create an account instead"
+                        onPress={() => router.push("./AccountTypeScreen")}
                         color="#D4A373"
                         textColor="#000000"
                     />
-                </KeyboardAvoidingView>
-            </View>
-        </View>
-    )
-}
+                </View>
+            </ScrollView>
+        </KeyboardAvoidingView>
+    );
+};
 
 const styles = StyleSheet.create({
-    background: {
-        backgroundColor: "#F5EDD8",
+    container: {
         flex: 1,
+        backgroundColor: "#F5EDD8",
+    },
+    scrollContainer: {
+        flexGrow: 1,
         justifyContent: "center",
+        paddingHorizontal: 24,
+        paddingTop: 80,
+        paddingBottom: 40,
     },
     backButton: {
         position: 'absolute',
         top: 40,
         left: 16,
         padding: 8,
-        zIndex: 1
-    }
-})
+        zIndex: 1,
+    },
+    form: {
+        width: "100%",
+        alignItems: "center",
+    },
+    input: {
+        width: "100%",
+        marginBottom: 16,
+    },
+});
 
 export default LoginScreen;
