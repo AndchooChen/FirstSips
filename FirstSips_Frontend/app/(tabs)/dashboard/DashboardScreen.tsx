@@ -178,8 +178,11 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     header: {
-        fontSize: 24,
+        fontSize: 32,
         fontWeight: 'bold',
+        color: '#D4A373',
+        fontFamily: 'System',
+        letterSpacing: 0.5,
     },
     menuButton: {
         margin: 0,

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
-import { TextInput, Switch, Divider, ActivityIndicator, Button } from 'react-native-paper';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, Platform, Modal, Image } from 'react-native';
+import { Divider, ActivityIndicator, Button } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
-import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, updateDoc } from 'firebase/firestore';
 import { useStripe } from '@stripe/stripe-react-native';
 import { API_URL } from '../config/api';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface ShopData {
     shopName: string;
@@ -25,6 +26,7 @@ interface CartItem {
     price: number;
     quantity: number;
     description?: string;
+    images?: string[];
 }
 
 const CheckoutScreen = () => {
@@ -34,41 +36,120 @@ const CheckoutScreen = () => {
         phoneNumber: '',
         userId: '',
     });
-    const [isDelivery, setIsDelivery] = useState(false);
     const [pickupTime, setPickupTime] = useState('');
-    const [deliveryAddress, setDeliveryAddress] = useState('');
     const [shopData, setShopData] = useState<ShopData | null>(null);
     const [loading, setLoading] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [cartItems, setCartItems] = useState<CartItem[]>([]);
     const router = useRouter();
     const params = useLocalSearchParams();
     const { items, shopId } = params;
 
-    // Parse cart items from params with type safety
-    const cartItems: CartItem[] = useMemo(() => {
+    // Time picker state
+    const [date, setDate] = useState(new Date());
+    const [showTimePicker, setShowTimePicker] = useState(false);
+
+    // Function to check item availability
+    const checkItemAvailability = async (itemId: string, requestedQuantity: number) => {
         try {
-            return JSON.parse(items as string || '[]');
+            // Get the current item data from Firestore
+            const itemDoc = await getDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`));
+            if (!itemDoc.exists()) {
+                return { available: false, message: 'Item no longer exists' };
+            }
+
+            const itemData = itemDoc.data();
+
+            // Check if item is hidden
+            if (itemData.quantity === -2) {
+                return { available: false, message: 'This item is not available for purchase.' };
+            }
+
+            // If unlimited stock
+            if (itemData.quantity === -1) {
+                return { available: true };
+            }
+
+            // Check if enough stock
+            if (requestedQuantity > itemData.quantity) {
+                return {
+                    available: false,
+                    message: `Sorry, only ${itemData.quantity} items available in stock.`
+                };
+            }
+
+            return { available: true };
+        } catch (error) {
+            console.error('Error checking item availability:', error);
+            return { available: false, message: 'Error checking availability' };
+        }
+    };
+
+    // Function to update cart items
+    const updateCartItem = async (itemId: string, changeType: 'increase' | 'decrease') => {
+        if (changeType === 'increase') {
+            // Check availability before increasing
+            const itemIndex = cartItems.findIndex(i => i.id === itemId);
+            const currentQuantity = cartItems[itemIndex].quantity;
+            const result = await checkItemAvailability(itemId, currentQuantity + 1);
+
+            if (!result.available) {
+                alert(result.message);
+                return;
+            }
+        }
+
+        setCartItems(prevItems => {
+            const updatedItems = [...prevItems];
+            const itemIndex = updatedItems.findIndex(i => i.id === itemId);
+
+            if (changeType === 'increase') {
+                // Increase quantity
+                updatedItems[itemIndex] = {
+                    ...updatedItems[itemIndex],
+                    quantity: updatedItems[itemIndex].quantity + 1
+                };
+            } else if (changeType === 'decrease') {
+                // Decrease quantity or remove
+                if (updatedItems[itemIndex].quantity > 1) {
+                    updatedItems[itemIndex] = {
+                        ...updatedItems[itemIndex],
+                        quantity: updatedItems[itemIndex].quantity - 1
+                    };
+                } else {
+                    // Remove item if quantity would be 0
+                    updatedItems.splice(itemIndex, 1);
+                }
+            }
+
+            return updatedItems;
+        });
+    };
+
+    // Parse cart items from params with type safety
+    useEffect(() => {
+        try {
+            const parsedItems = JSON.parse(items as string || '[]');
+            setCartItems(parsedItems);
         } catch (error) {
             console.error('Error parsing cart items:', error);
-            return [];
+            setCartItems([]);
         }
     }, [items]);
 
     // Calculate totals with error handling
     const totals = useMemo(() => {
-        const subtotal = cartItems.reduce((sum, item) => 
+        const subtotal = cartItems.reduce((sum, item) =>
             sum + (item.price * item.quantity), 0);
         const tax = subtotal * 0.0825; // 8.25% tax
-        const deliveryFee = isDelivery ? 5.99 : 0;
-        const total = subtotal + tax + deliveryFee;
+        const total = subtotal + tax;
 
         return {
             subtotal,
             tax,
-            deliveryFee,
             total
         };
-    }, [cartItems, isDelivery]);
+    }, [cartItems]);
 
     const fetchPaymentSheetParams = async () => {
         const userId = FIREBASE_AUTH.currentUser?.uid;
@@ -89,7 +170,7 @@ const CheckoutScreen = () => {
                 shopId
             }),
         });
-        
+
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Payment sheet error:', {
@@ -148,6 +229,17 @@ const CheckoutScreen = () => {
 
         try {
             setIsProcessing(true);
+
+            // Check availability for all items before proceeding
+            for (const item of cartItems) {
+                const result = await checkItemAvailability(item.id, item.quantity);
+                if (!result.available) {
+                    Alert.alert('Inventory Issue', result.message);
+                    setIsProcessing(false);
+                    return;
+                }
+            }
+
             const { error } = await presentPaymentSheet();
 
             if (error) {
@@ -172,19 +264,35 @@ const CheckoutScreen = () => {
 
             const docRef = await addDoc(orderRef, newOrder);
 
-            // Store order references
-            await Promise.all([
-                setDoc(doc(FIREBASE_DB, 'users', customerInfo.userId, 'orders', docRef.id), {
-                    customerId: customerInfo.userId,
-                    shopId: shopId,
-                    createdAt: new Date(),
-                }),
-                setDoc(doc(FIREBASE_DB, 'shops', shopId, 'orders', docRef.id), {
-                    customerId: customerInfo.userId,
-                    shopId: shopId,
-                    createdAt: new Date(),
-                })
-            ]);
+            // Store order references for user
+            await setDoc(doc(FIREBASE_DB, 'users', customerInfo.userId, 'orders', docRef.id), {
+                customerId: customerInfo.userId,
+                shopId: shopId as string,
+                createdAt: new Date(),
+            });
+
+            // Store order references for shop
+            await setDoc(doc(FIREBASE_DB, 'shops', shopId as string, 'orders', docRef.id), {
+                customerId: customerInfo.userId,
+                shopId: shopId as string,
+                createdAt: new Date(),
+            });
+
+            // Update item quantities in Firestore
+            for (const item of cartItems) {
+                const itemRef = doc(FIREBASE_DB, `shops/${shopId}/items/${item.id}`);
+                const itemDoc = await getDoc(itemRef);
+
+                if (itemDoc.exists()) {
+                    const itemData = itemDoc.data();
+
+                    // Only update if the item has a limited quantity (not unlimited or hidden)
+                    if (itemData.quantity !== -1 && itemData.quantity !== -2) {
+                        const newQuantity = itemData.quantity - item.quantity;
+                        await updateDoc(itemRef, { quantity: newQuantity });
+                    }
+                }
+            }
 
             Alert.alert('Success', 'Your order has been placed!');
             router.push({
@@ -258,7 +366,7 @@ const CheckoutScreen = () => {
 
                 if (shopDoc.exists()) {
                     const shopDataFromDB = shopDoc.data() as ShopData;
-                    
+
                     // Fetch owner's data to get phone number
                     const ownerDoc = await getDoc(doc(FIREBASE_DB, 'users', shopDataFromDB.ownerId));
                     if (ownerDoc.exists()) {
@@ -290,69 +398,125 @@ const CheckoutScreen = () => {
                     <Ionicons name="arrow-back" size={24} color="#6F4E37" />
                 </TouchableOpacity>
 
-                {/* Delivery/Pickup Toggle */}
-                <View style={styles.section}>
-                    <View style={styles.toggleContainer}>
-                        <Text style={styles.toggleText}>Delivery</Text>
-                        <Switch
-                            value={isDelivery}
-                            onValueChange={setIsDelivery}
-                            color="#D4A373"
-                        />
-                    </View>
-                </View>
-
-                {/* Location Information */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
-                        {isDelivery ? 'Delivery Address' : 'Pickup Location'}
-                    </Text>
-                    {isDelivery ? (
-                        <TextInput
-                            label="Delivery Address"
-                            value={deliveryAddress}
-                            onChangeText={setDeliveryAddress}
-                            mode="outlined"
-                            style={styles.input}
-                        />
-                    ) : (
-                        <View style={styles.shopInfo}>
-                            <Text style={styles.shopName}>{shopData?.shopName}</Text>
-                            <Text style={styles.shopAddress}>{shopData?.streetAddress}</Text>
-                            <Text style={styles.shopAddress}>
-                                {shopData?.city}, {shopData?.state} {shopData?.zipCode}
-                            </Text>
-                            <Text style={styles.shopPhone}>📞 Contact: {shopData?.phoneNumber}</Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* Time Selection */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
-                        {isDelivery ? 'Delivery Time' : 'Pickup Time'}
-                    </Text>
-                    <TextInput
-                        label="Preferred Time"
-                        value={pickupTime}
-                        onChangeText={setPickupTime}
-                        mode="outlined"
-                        style={styles.input}
-                    />
-                </View>
-
                 {/* Cart Items */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Order Details</Text>
                     {cartItems.map((item, index) => (
                         <View key={index} style={styles.cartItem}>
+                            <Image
+                                source={item.images?.[0] ? { uri: item.images[0] } : require('../assets/images/no_item_image.png')}
+                                style={styles.itemImage}
+                            />
                             <View style={styles.itemInfo}>
                                 <Text style={styles.itemName}>{item.name}</Text>
-                                <Text style={styles.itemQuantity}>x{item.quantity}</Text>
+                                <Text style={styles.itemPrice}>${(item.price).toFixed(2)}</Text>
+                                <View style={styles.quantityContainer}>
+                                    <TouchableOpacity
+                                        style={styles.quantityButton}
+                                        onPress={() => updateCartItem(item.id, 'decrease')}
+                                    >
+                                        <Ionicons name="remove" size={20} color="#6F4E37" />
+                                    </TouchableOpacity>
+
+                                    <Text style={styles.quantityText}>{item.quantity}</Text>
+
+                                    <TouchableOpacity
+                                        style={styles.quantityButton}
+                                        onPress={() => updateCartItem(item.id, 'increase')}
+                                    >
+                                        <Ionicons name="add" size={20} color="#6F4E37" />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                            <Text style={styles.itemPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
+                            <Text style={styles.itemTotalPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
                         </View>
                     ))}
+                </View>
+
+                {/* Location Information */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Pickup Location</Text>
+                    <View style={styles.shopInfo}>
+                        <Text style={styles.shopName}>{shopData?.shopName}</Text>
+                        <Text style={styles.shopAddress}>{shopData?.streetAddress}</Text>
+                        <Text style={styles.shopAddress}>
+                            {shopData?.city}, {shopData?.state} {shopData?.zipCode}
+                        </Text>
+                        <Text style={styles.shopPhone}>📞 Contact: {shopData?.phoneNumber}</Text>
+                    </View>
+                </View>
+
+                {/* Time Selection */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Pickup Time</Text>
+                    <TouchableOpacity
+                        style={styles.timePickerButton}
+                        onPress={() => setShowTimePicker(true)}
+                    >
+                        <Text style={styles.timePickerButtonText}>
+                            {pickupTime || 'Select Pickup Time'}
+                        </Text>
+                        <Ionicons name="time-outline" size={24} color="#6F4E37" />
+                    </TouchableOpacity>
+
+                    {showTimePicker && (
+                        Platform.OS === 'ios' ? (
+                            <Modal
+                                transparent={true}
+                                visible={showTimePicker}
+                                animationType="slide"
+                            >
+                                <View style={styles.modalContainer}>
+                                    <View style={styles.modalContent}>
+                                        <Text style={styles.modalTitle}>Select Pickup Time</Text>
+                                        <DateTimePicker
+                                            value={date}
+                                            mode="time"
+                                            display="spinner"
+                                            minuteInterval={5}
+                                            onChange={(_, selectedDate) => {
+                                                if (selectedDate) {
+                                                    setDate(selectedDate);
+                                                    const hours = selectedDate.getHours();
+                                                    const minutes = selectedDate.getMinutes();
+                                                    const ampm = hours >= 12 ? 'PM' : 'AM';
+                                                    const formattedHours = hours % 12 || 12;
+                                                    const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
+                                                    setPickupTime(`${formattedHours}:${formattedMinutes} ${ampm}`);
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            mode="contained"
+                                            onPress={() => setShowTimePicker(false)}
+                                            style={styles.modalButton}
+                                        >
+                                            Done
+                                        </Button>
+                                    </View>
+                                </View>
+                            </Modal>
+                        ) : (
+                            <DateTimePicker
+                                value={date}
+                                mode="time"
+                                display="default"
+                                minuteInterval={5}
+                                onChange={(_, selectedDate) => {
+                                    setShowTimePicker(false);
+                                    if (selectedDate) {
+                                        setDate(selectedDate);
+                                        const hours = selectedDate.getHours();
+                                        const minutes = selectedDate.getMinutes();
+                                        const ampm = hours >= 12 ? 'PM' : 'AM';
+                                        const formattedHours = hours % 12 || 12;
+                                        const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
+                                        setPickupTime(`${formattedHours}:${formattedMinutes} ${ampm}`);
+                                    }
+                                }}
+                            />
+                        )
+                    )}
                 </View>
 
                 {/* Order Summary */}
@@ -366,12 +530,7 @@ const CheckoutScreen = () => {
                         <Text>Tax</Text>
                         <Text>${totals.tax.toFixed(2)}</Text>
                     </View>
-                    {isDelivery && (
-                        <View style={styles.summaryRow}>
-                            <Text>Delivery Fee</Text>
-                            <Text>${totals.deliveryFee.toFixed(2)}</Text>
-                        </View>
-                    )}
+
                     <Divider style={styles.divider} />
                     <View style={styles.summaryRow}>
                         <Text style={styles.totalText}>Total</Text>
@@ -407,6 +566,9 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5EDD8',
     },
+    backButton: {
+        marginBottom: 10,
+    },
     container: {
         flex: 1,
         backgroundColor: '#F5EDD8',
@@ -424,18 +586,47 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         color: '#6F4E37',
     },
-    toggleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    toggleText: {
-        fontSize: 16,
-        color: '#6F4E37',
-    },
     input: {
         backgroundColor: '#FFFFFF',
         marginBottom: 8,
+    },
+    timePickerButton: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#F5F5F5',
+        padding: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    timePickerButtonText: {
+        fontSize: 16,
+        color: '#6F4E37',
+    },
+    modalContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalContent: {
+        width: '80%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        padding: 20,
+        alignItems: 'center',
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 20,
+        color: '#6F4E37',
+    },
+    modalButton: {
+        marginTop: 20,
+        backgroundColor: '#D4A373',
+        width: '100%',
     },
     shopInfo: {
         marginVertical: 8,
@@ -457,22 +648,56 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+    },
+    itemImage: {
+        width: 60,
+        height: 60,
+        borderRadius: 8,
+        marginRight: 12,
     },
     itemInfo: {
         flex: 1,
+        justifyContent: 'space-between',
     },
     itemName: {
         fontSize: 16,
+        fontWeight: 'bold',
         color: '#6F4E37',
-    },
-    itemQuantity: {
-        color: '#666666',
-        marginTop: 4,
+        marginBottom: 4,
     },
     itemPrice: {
+        fontSize: 14,
+        color: '#666666',
+        marginBottom: 8,
+    },
+    itemTotalPrice: {
         fontSize: 16,
         fontWeight: '500',
+        color: '#6F4E37',
+    },
+    quantityContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    quantityButton: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#F5F5F5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    quantityText: {
+        width: 30,
+        textAlign: 'center',
+        fontSize: 16,
+        color: '#333333',
     },
     summaryRow: {
         flexDirection: 'row',

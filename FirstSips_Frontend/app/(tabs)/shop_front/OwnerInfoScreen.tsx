@@ -99,6 +99,7 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 2,
+        marginTop: 40,
     },
     backButton: {
         padding: 8,

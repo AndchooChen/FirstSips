@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, SafeAreaView, Image, FlatList, TouchableOpacity, TextInput, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, ScrollView } from "react-native";
 import ItemCard from "../../components/ItemCard";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -19,15 +19,7 @@ interface CartItem extends ShopItem {
   quantity: number;
 }
 
-interface Shop {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  images?: string[];
-  quantity?: number;
-  ownerId?: string;
-}
+
 
 const ShopScreen = () => {
   const router = useRouter();
@@ -35,9 +27,9 @@ const ShopScreen = () => {
   const { shopId, shopName, shopDescription } = params;
   const [shopData, setShopData] = useState<DocumentData | null>(null);
   const [items, setItems] = useState<ShopItem[]>([]);
-  const [loading, setLoading] = useState(true);
+
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+
 
   useEffect(() => {
     // Fetch shop details
@@ -60,7 +52,7 @@ const ShopScreen = () => {
         itemsList.push({ id: doc.id, ...doc.data() } as ShopItem);
       });
       setItems(itemsList);
-      setLoading(false);
+
     });
 
     fetchShopData();
@@ -68,16 +60,61 @@ const ShopScreen = () => {
   }, [shopId]);
 
   // Add to cart function
-  const handleAddToCart = (item: ShopItem, quantity: number) => {
+  const handleAddToCart = (item: ShopItem, quantityChange: number) => {
+    // If trying to remove from cart
+    if (quantityChange < 0) {
+      const existingItem = cartItems.find(cartItem => cartItem.id === item.id);
+      if (existingItem) {
+        // Calculate new quantity
+        const newQuantity = existingItem.quantity + quantityChange;
+
+        if (newQuantity <= 0) {
+          // Remove item from cart if quantity is 0 or less
+          setCartItems(cartItems.filter(cartItem => cartItem.id !== item.id));
+        } else {
+          // Update quantity
+          setCartItems(cartItems.map(cartItem =>
+            cartItem.id === item.id
+              ? {...cartItem, quantity: newQuantity}
+              : cartItem
+          ));
+        }
+      }
+      return;
+    }
+
+    // If trying to add to cart
+    // Check if item is hidden
+    if (item.quantity === -2) {
+      alert('This item is not available for purchase.');
+      return;
+    }
+
+    // Check if there's enough stock
+    if (item.quantity !== -1 && item.quantity !== undefined) { // Not unlimited
+      const existingItem = cartItems.find(cartItem => cartItem.id === item.id);
+      const currentInCart = existingItem ? existingItem.quantity : 0;
+      const newTotal = currentInCart + quantityChange;
+
+      if (newTotal > item.quantity) {
+        alert(`Sorry, only ${item.quantity} items available in stock. You already have ${currentInCart} in your cart.`);
+        return;
+      }
+    }
+
+    // If we get here, we can add to cart
     const existingItem = cartItems.find(cartItem => cartItem.id === item.id);
+
     if (existingItem) {
-      setCartItems(cartItems.map(cartItem => 
-        cartItem.id === item.id 
-          ? {...cartItem, quantity: cartItem.quantity + quantity}
+      // Update quantity
+      setCartItems(cartItems.map(cartItem =>
+        cartItem.id === item.id
+          ? {...cartItem, quantity: existingItem.quantity + quantityChange}
           : cartItem
       ));
     } else {
-      setCartItems([...cartItems, {...item, quantity}]);
+      // Add new item to cart
+      setCartItems([...cartItems, {...item, quantity: quantityChange}]);
     }
   };
 
@@ -87,10 +124,10 @@ const ShopScreen = () => {
       alert('Please add items to your cart');
       return;
     }
-    
+
     router.push({
       pathname: "../../(checkout)/CheckoutScreen",
-      params: { 
+      params: {
         items: JSON.stringify(cartItems),
         shopId: shopId
       }
@@ -106,10 +143,7 @@ const ShopScreen = () => {
     }
   };
 
-  const filteredItems = items.filter(item => 
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+
 
   return (
     <View style={styles.container}>
@@ -133,7 +167,7 @@ const ShopScreen = () => {
         <View style={styles.shopInfo}>
           <Image
             source={
-              shopData?.profileImage 
+              shopData?.profileImage
                 ? { uri: shopData.profileImage }
                 : require("../../assets/images/no_shop_image.png")
             }
@@ -143,34 +177,16 @@ const ShopScreen = () => {
           <Text style={styles.shopDescription}>{shopDescription}</Text>
         </View>
 
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-          <TextInput
-            placeholder="Search items..."
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#999"
-          />
-        </View>
 
-        <View style={styles.deliveryOptions}>
-          <TouchableOpacity style={[styles.deliveryOption, styles.activeOption]}>
-            <Text style={styles.optionText}>Pickup</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.deliveryOption}>
-            <Text style={styles.optionText}>Delivery</Text>
-          </TouchableOpacity>
-        </View>
 
         <FlatList
-          data={filteredItems}
+          data={items}
           renderItem={({ item }) => (
             <ItemCard
               name={item.name}
               description={item.description}
               price={item.price}
-              image={item.images?.[0] 
+              image={item.images?.[0]
                 ? { uri: item.images[0] }
                 : require("../../assets/images/no_item_image.png")}
               onAddToCart={(quantity) => handleAddToCart(item, quantity)}
@@ -185,7 +201,7 @@ const ShopScreen = () => {
 
       {cartItems.length > 0 && (
         <View style={styles.checkoutContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.checkoutButton}
             onPress={handleCheckout}
           >
@@ -254,46 +270,7 @@ const styles = StyleSheet.create({
     color: "#666666",
     textAlign: "center",
   },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    margin: 16,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 40,
-    fontSize: 16,
-    color: "#333333",
-  },
-  deliveryOptions: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  deliveryOption: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginHorizontal: 8,
-    backgroundColor: "#F5F5F5",
-  },
-  activeOption: {
-    backgroundColor: "#6F4E37",
-  },
-  optionText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#666666",
-  },
+
   itemsList: {
     paddingBottom: 100,
   },

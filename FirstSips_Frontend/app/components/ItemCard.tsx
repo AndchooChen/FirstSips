@@ -11,40 +11,35 @@ type ItemCardProps = {
   cartQuantity?: number;
 };
 
-export default function ItemCard({ 
-  name, 
-  description, 
-  price, 
-  image, 
+export default function ItemCard({
+  name,
+  description,
+  price,
+  image,
   onAddToCart,
   cartQuantity = 0
 }: ItemCardProps) {
   const [showControls, setShowControls] = useState(false);
-  const [quantity, setQuantity] = useState(1);
 
   const handleCardPress = () => {
     setShowControls(!showControls);
   };
 
   const incrementQuantity = () => {
-    setQuantity(prev => prev + 1);
-    onAddToCart(quantity + 1);
+    onAddToCart(1); // Add 1 to cart
   };
 
   const decrementQuantity = () => {
-    if (quantity > 1) {
-      setQuantity(prev => prev - 1);
-      onAddToCart(quantity - 1);
-    }
+    onAddToCart(-1); // Remove 1 from cart
   };
 
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.card}
       onPress={handleCardPress}
       activeOpacity={0.9}
     >
-      <Image 
+      <Image
         source={image}
         style={styles.image}
         defaultSource={require('../assets/images/no_item_image.png')}
@@ -55,24 +50,24 @@ export default function ItemCard({
           <Text style={styles.description}>{description}</Text>
           <Text style={styles.price}>${price.toFixed(2)}</Text>
         </View>
-        
+
         {showControls && (
           <View style={styles.quantityContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={decrementQuantity}
               style={styles.quantityButton}
             >
               <Ionicons name="remove" size={20} color="#6F4E37" />
             </TouchableOpacity>
-            
+
             <TextInput
               style={styles.quantityInput}
-              value={cartQuantity.toString()}
+              value={cartQuantity > 0 ? cartQuantity.toString() : '0'}
               editable={false}
               selectTextOnFocus={false}
             />
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               onPress={incrementQuantity}
               style={styles.quantityButton}
             >

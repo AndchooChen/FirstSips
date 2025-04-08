@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import ScreenWideButton from '../../components/ScreenWideButton';
 import * as ImagePicker from 'expo-image-picker';
 import { FIREBASE_AUTH, FIREBASE_DB } from '../../auth/FirebaseConfig';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { useRouter } from "expo-router";
 import { collection, query, onSnapshot } from 'firebase/firestore';
 
@@ -41,16 +41,16 @@ export default function EditShopScreen() {
             alert('Not authenticated');
             return;
         }
-    
+
         // Fetch the user's shop ID
         const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
         const shopId = userDoc.data()?.shopId;
-    
+
         if (!shopId) {
             alert('Shop not found');
             return;
         }
-    
+
         // Navigate to OrderQueueScreen with the shopId
         router.push({
             pathname: '/(tabs)/shop_owner/OrderManagementScreen',
@@ -64,17 +64,42 @@ export default function EditShopScreen() {
             alert('Not authenticated');
             return;
         }
-    
+
         const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
         const shopId = userDoc.data()?.shopId;
-    
+
         if (!shopId) {
             alert('Please create a shop first');
             router.push("/(tabs)/shop_owner/CreateShopScreen");
             return;
         }
-    
+
         router.push("/(tabs)/shop_owner/AddItemScreen");
+    };
+
+    const handleDeleteItem = async (itemId: string) => {
+        const userId = FIREBASE_AUTH.currentUser?.uid;
+        if (!userId) return;
+
+        // Fetch user document
+        const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
+        const shopId = userDoc.data()?.shopId;
+
+        if (!shopId) {
+            alert('Shop not found');
+            return;
+        }
+
+        // Confirm deletion
+        if (confirm('Are you sure you want to delete this item?')) {
+            try {
+                await deleteDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`));
+                alert('Item deleted successfully');
+            } catch (error) {
+                console.error('Error deleting item:', error);
+                alert('Failed to delete item');
+            }
+        }
     };
 
     const handleSaveChanges = async () => {
@@ -120,7 +145,7 @@ export default function EditShopScreen() {
             if (!shopId) return;
 
             const itemsQuery = query(collection(FIREBASE_DB, `shops/${shopId}/items`));
-            
+
             const unsubscribe = onSnapshot(itemsQuery, (snapshot) => {
                 const itemsList = [];
                 snapshot.forEach((doc) => {
@@ -138,13 +163,13 @@ export default function EditShopScreen() {
     return (
         <View style={styles.background}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={handleHomePress}>
+                <TouchableOpacity onPress={handleHomePress} style={styles.headerButton}>
                     <Ionicons name="home" size={24} color="#6F4E37" />
                 </TouchableOpacity>
 
                 <Text style={styles.headerTitle}>Edit Shop</Text>
 
-                <TouchableOpacity onPress={handleOrderQueuePress} style={styles.queueButton}>
+                <TouchableOpacity onPress={handleOrderQueuePress} style={styles.headerButton}>
                     <Ionicons name="list" size={24} color="#6F4E37" />
                 </TouchableOpacity>
             </View>
@@ -169,55 +194,65 @@ export default function EditShopScreen() {
             </View>
 
             {/* Shop Status Section */}
-            <View style={styles.statusContainer}>
-                <Text style={styles.statusText}>Shop is {isOpen ? 'Open' : 'Closed'}</Text>
-                <Switch
-                    value={isOpen}
-                    onValueChange={setIsOpen}
-                    color="#D4A373"
-                />
-            </View>
+            <TouchableOpacity
+                style={[styles.statusButton, isOpen ? styles.openButton : styles.closedButton]}
+                onPress={() => setIsOpen(!isOpen)}
+            >
+                <Text style={styles.statusButtonText}>
+                    {isOpen ? 'OPEN' : 'CLOSED'}
+                </Text>
+            </TouchableOpacity>
 
             {/* Products List */}
             <Text style={styles.sectionTitle}>Products</Text>
             <View style={styles.productsList}>
                 {items.map((item) => (
-                    <TouchableOpacity 
-                        key={item.id} 
-                        style={styles.productCard}
-                        onPress={async () => {
-                            const userId = FIREBASE_AUTH.currentUser?.uid;
-                            if (!userId) return;
-                            
-                            // Fetch user document
-                            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-                            const shopId = userDoc.data()?.shopId;
-                            
-                            if (!shopId) {
-                                alert('Shop not found');
-                                return;
-                            }
-                
-                            router.push({
-                                pathname: "/(tabs)/shop_owner/EditItemScreen",
-                                params: { shopId: shopId, itemId: item.id }
-                            });
-                        }}
-                    >
-                        <Image 
-                            source={
-                                item.images?.[0] 
-                                    ? { uri: item.images[0] }
-                                    : require('../../assets/images/no_item_image.png')
-                            }
-                            style={styles.productImage}
-                            defaultSource={require('../../assets/images/no_item_image.png')}
-                        />
-                        <View style={styles.productInfo}>
-                            <Text style={styles.productName}>{item.name}</Text>
-                            <Text style={styles.productPrice}>${item.price}</Text>
-                        </View>
-                    </TouchableOpacity>
+                    <View key={item.id} style={styles.productCardContainer}>
+                        <TouchableOpacity
+                            style={styles.productCard}
+                            onPress={async () => {
+                                const userId = FIREBASE_AUTH.currentUser?.uid;
+                                if (!userId) return;
+
+                                // Fetch user document
+                                const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
+                                const shopId = userDoc.data()?.shopId;
+
+                                if (!shopId) {
+                                    alert('Shop not found');
+                                    return;
+                                }
+
+                                router.push({
+                                    pathname: "/(tabs)/shop_owner/EditItemScreen",
+                                    params: { shopId: shopId, itemId: item.id }
+                                });
+                            }}
+                        >
+                            <Image
+                                source={
+                                    item.images?.[0]
+                                        ? { uri: item.images[0] }
+                                        : require('../../assets/images/no_item_image.png')
+                                }
+                                style={styles.productImage}
+                                defaultSource={require('../../assets/images/no_item_image.png')}
+                            />
+                            <View style={styles.productInfo}>
+                                <Text style={styles.productName}>{item.name}</Text>
+                                <Text style={styles.productPrice}>${item.price}</Text>
+                                <View style={styles.quantityInfo}>
+                                    <Text style={styles.quantityText}>In stock: {item.quantity || 'Unlimited'}</Text>
+                                </View>
+                            </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.deleteButton}
+                            onPress={() => handleDeleteItem(item.id)}
+                        >
+                            <Ionicons name="trash-outline" size={24} color="#FF6B6B" />
+                        </TouchableOpacity>
+                    </View>
                 ))}
             </View>
 
@@ -274,18 +309,19 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 24,
         paddingTop: 40,
+        paddingHorizontal: 16,
     },
     headerTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        marginLeft: 16,
         color: '#6F4E37',
+        flex: 1,
+        textAlign: 'center',
     },
-    queueButton: {
-        position: 'absolute',
-        right: 16,
+    headerButton: {
         padding: 8,
     },
     imageContainer: {
@@ -319,18 +355,25 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#6F4E37',
     },
-    statusContainer: {
-        flexDirection: 'row',
+    statusButton: {
         alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
         padding: 16,
         borderRadius: 8,
         marginTop: 24,
+        height: 60,
+        width: '100%',
     },
-    statusText: {
-        fontSize: 16,
-        color: '#6F4E37',
+    openButton: {
+        backgroundColor: '#4CAF50',
+    },
+    closedButton: {
+        backgroundColor: '#F44336',
+    },
+    statusButtonText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
     },
     sectionTitle: {
         fontSize: 18,
@@ -344,12 +387,29 @@ const styles = StyleSheet.create({
         marginTop: 16,
         gap: 12,
     },
+    productCardContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
     productCard: {
+        flex: 1,
         flexDirection: 'row',
         backgroundColor: '#FFFFFF',
         borderRadius: 8,
         padding: 12,
         alignItems: 'center',
+    },
+    deleteButton: {
+        padding: 10,
+        marginLeft: 8,
+    },
+    quantityInfo: {
+        marginTop: 4,
+    },
+    quantityText: {
+        fontSize: 12,
+        color: '#666666',
     },
     productImage: {
         width: 60,

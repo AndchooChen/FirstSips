@@ -1,6 +1,6 @@
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Switch } from 'react-native';
 import { useState, useEffect } from 'react';
-import { TextInput, Text } from 'react-native-paper';
+import { TextInput, Text, Button } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { FIREBASE_DB } from '../../auth/FirebaseConfig';
@@ -15,8 +15,10 @@ export default function EditItemScreen() {
     const [description, setDescription] = useState('');
     const [price, setPrice] = useState('');
     const [quantity, setQuantity] = useState('');
+    const [isUnlimited, setIsUnlimited] = useState(false);
+    const [isHidden, setIsHidden] = useState(false);
     const [images, setImages] = useState<string[]>([]);
-    
+
     const router = useRouter();
 
     useEffect(() => {
@@ -47,7 +49,15 @@ export default function EditItemScreen() {
                 setCategory(data.category);
                 setDescription(data.description);
                 setPrice(data.price.toString());
-                setQuantity(data.quantity.toString());
+                if (data.quantity === -1) {
+                    setIsUnlimited(true);
+                    setQuantity('');
+                } else if (data.quantity === -2) {
+                    setIsHidden(true);
+                    setQuantity('');
+                } else {
+                    setQuantity(data.quantity.toString());
+                }
                 setImages(data.images || []);
             }
         };
@@ -71,14 +81,61 @@ export default function EditItemScreen() {
         setImages(images.filter((_, i) => i !== index));
     };
 
+    const incrementQuantity = () => {
+        if (isUnlimited || isHidden) return;
+        const currentQuantity = quantity === '' ? 0 : parseInt(quantity);
+        setQuantity((currentQuantity + 1).toString());
+    };
+
+    const decrementQuantity = () => {
+        if (isUnlimited || isHidden) return;
+        const currentQuantity = quantity === '' ? 0 : parseInt(quantity);
+        if (currentQuantity > 0) {
+            setQuantity((currentQuantity - 1).toString());
+        }
+    };
+
+    const handleQuantityChange = (text: string) => {
+        // Only allow numbers
+        if (/^\d*$/.test(text)) {
+            setQuantity(text);
+        }
+    };
+
+    const toggleUnlimited = (value: boolean) => {
+        setIsUnlimited(value);
+        if (value) {
+            setIsHidden(false);
+            setQuantity('');
+        }
+    };
+
+    const toggleHidden = (value: boolean) => {
+        setIsHidden(value);
+        if (value) {
+            setIsUnlimited(false);
+            setQuantity('');
+        }
+    };
+
     const handleUpdateItem = async () => {
         try {
+            let finalQuantity: number;
+
+            if (isUnlimited) {
+                finalQuantity = -1; // Use -1 to represent unlimited
+            } else if (isHidden) {
+                finalQuantity = -2; // Use -2 to represent hidden
+            } else {
+                finalQuantity = quantity === '' ? 0 : parseInt(quantity);
+            }
+
             await updateDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`), {
                 name,
                 category,
                 description,
                 price: parseFloat(price),
-                quantity: parseInt(quantity),
+                quantity: finalQuantity,
                 images,
                 updatedAt: new Date().toISOString()
             });
@@ -136,14 +193,59 @@ export default function EditItemScreen() {
                     style={styles.input}
                 />
 
-                <TextInput
-                    label="Quantity"
-                    value={quantity}
-                    onChangeText={setQuantity}
-                    mode="outlined"
-                    keyboardType="number-pad"
-                    style={styles.input}
-                />
+                {/* Quantity Section */}
+                <Text style={styles.sectionTitle}>Inventory Management</Text>
+
+                <View style={styles.toggleContainer}>
+                    <Text>Unlimited Stock</Text>
+                    <Switch
+                        value={isUnlimited}
+                        onValueChange={toggleUnlimited}
+                        trackColor={{ false: '#767577', true: '#D4A373' }}
+                        thumbColor={isUnlimited ? '#f5dd4b' : '#f4f3f4'}
+                        disabled={isHidden}
+                    />
+                </View>
+
+                <View style={styles.toggleContainer}>
+                    <Text>Hide Item</Text>
+                    <Switch
+                        value={isHidden}
+                        onValueChange={toggleHidden}
+                        trackColor={{ false: '#767577', true: '#D4A373' }}
+                        thumbColor={isHidden ? '#f5dd4b' : '#f4f3f4'}
+                        disabled={isUnlimited}
+                    />
+                </View>
+
+                {!isUnlimited && !isHidden && (
+                    <View style={styles.quantityContainer}>
+                        <Text style={styles.quantityLabel}>Quantity in Stock:</Text>
+                        <View style={styles.quantityControls}>
+                            <TouchableOpacity
+                                style={styles.quantityButton}
+                                onPress={decrementQuantity}
+                            >
+                                <Ionicons name="remove" size={20} color="#6F4E37" />
+                            </TouchableOpacity>
+
+                            <TextInput
+                                value={quantity}
+                                onChangeText={handleQuantityChange}
+                                keyboardType="number-pad"
+                                style={styles.quantityInput}
+                                mode="outlined"
+                            />
+
+                            <TouchableOpacity
+                                style={styles.quantityButton}
+                                onPress={incrementQuantity}
+                            >
+                                <Ionicons name="add" size={20} color="#6F4E37" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
 
                 {/* Image Section */}
                 <Text style={styles.sectionTitle}>Product Images</Text>
@@ -151,7 +253,7 @@ export default function EditItemScreen() {
                     {images.map((uri, index) => (
                         <View key={index} style={styles.imageWrapper}>
                             <Image source={{ uri }} style={styles.imagePreview} />
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={styles.removeImageButton}
                                 onPress={() => removeImage(index)}
                             >
@@ -201,6 +303,47 @@ const styles = StyleSheet.create({
     },
     multilineInput: {
         height: 100,
+    },
+    toggleContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 12,
+    },
+    quantityContainer: {
+        backgroundColor: '#FFFFFF',
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 16,
+    },
+    quantityLabel: {
+        fontSize: 16,
+        marginBottom: 12,
+        color: '#6F4E37',
+    },
+    quantityControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    quantityButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F5F5F5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    quantityInput: {
+        width: 80,
+        textAlign: 'center',
+        marginHorizontal: 12,
+        backgroundColor: '#FFFFFF',
     },
     sectionTitle: {
         fontSize: 18,
