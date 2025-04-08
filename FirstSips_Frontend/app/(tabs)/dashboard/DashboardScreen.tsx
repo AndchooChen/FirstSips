@@ -2,15 +2,15 @@
 import { View, Text, StyleSheet, FlatList } from "react-native";
 import { useState, useEffect } from "react";
 import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
-import { collection, query, onSnapshot } from 'firebase/firestore';
-import { doc, getDoc } from 'firebase/firestore';
-import ShopCard from "../../components/ShopCard"
+import { collection, query, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import ShopCard from "../../components/ShopCard";
 import { useRouter } from "expo-router";
 import ScreenWideButton from "../../components/ScreenWideButton";
 
 export default function DashboardScreen() {
     const [hasShop, setHasShop] = useState(false);
     const [shops, setShops] = useState([]);
+    const [userShopId, setUserShopId] = useState(null);
     const router = useRouter();
 
     useEffect(() => {
@@ -21,31 +21,34 @@ export default function DashboardScreen() {
             const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
             const shopId = userDoc.data()?.shopId;
             setHasShop(!!shopId);
+            setUserShopId(shopId); // Store the user's shop ID
         };
 
         checkUserShop();
     }, []);
 
-    // Fetch all shops
     useEffect(() => {
         const shopsQuery = query(collection(FIREBASE_DB, 'shops'));
         
         const unsubscribe = onSnapshot(shopsQuery, (snapshot) => {
-            const shopsList = [];
+            let shopsList = [];
             snapshot.forEach((doc) => {
                 shopsList.push({ id: doc.id, ...doc.data() });
             });
-            setShops(shopsList);
+
+            // Filter out the user's own shop
+            const filteredShops = shopsList.filter(shop => shop.shopId !== userShopId);
+            setShops(filteredShops);
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [userShopId]); // Re-run when userShopId is set
 
     const handleShopAction = () => {
         if (hasShop) {
-            router.push("../shop/EditShopScreen");
+            router.push("../shop_owner/EditShopScreen");
         } else {
-            router.push("../shop/CreateShopScreen");
+            router.push("../shop_owner/CreateShopScreen");
         }
 =======
 import React, { useEffect, useState } from 'react';
@@ -115,6 +118,10 @@ const DashboardScreen = () => {
 >>>>>>> LoginRedesign
     };
 
+    const handleOrderHistory = () => {
+        router.push('/(tabs)/shop_front/OrderHistoryScreen');
+    };
+
     const handleLogout = async () => {
         try {
             await FIREBASE_AUTH.signOut();
@@ -123,14 +130,18 @@ const DashboardScreen = () => {
             console.log(error);
         }
 <<<<<<< HEAD
+<<<<<<< HEAD
     }
+=======
+    };
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 
     const renderItem = ({ item }) => (
         <ShopCard
             name={item.shopName}
             description={item.description}
             onPress={() => router.push({
-                pathname: "../shop/ShopScreen",
+                pathname: "../shop_front/ShopScreen",
                 params: { 
                     shopId: item.shopId,
                     shopName: item.shopName,
@@ -138,7 +149,7 @@ const DashboardScreen = () => {
                 }
             })}
         />
-    )
+    );
 
     return (
         <View style={styles.background}>
@@ -149,6 +160,12 @@ const DashboardScreen = () => {
                     textColor="#FFFFFF"
                     color="#D4A373"
                     onPress={handleShopAction}
+                />
+                <ScreenWideButton
+                    text="Order History"
+                    textColor="#FFFFFF"
+                    color="#6A8CAF"
+                    onPress={handleOrderHistory}
                 />
                 <ScreenWideButton
                     text="Logout"
@@ -173,7 +190,7 @@ const styles = StyleSheet.create({
     background: {
         backgroundColor: "#F5EDD8",
         flex: 1,
-        width: '100%', // Add this to ensure full width
+        width: '100%',
     },
     header: {
         marginTop: 40,
@@ -189,10 +206,11 @@ const styles = StyleSheet.create({
     },
     flatListContainer: {
         flexGrow: 1,
-        width: '100%', // Add this to ensure full width
+        width: '100%',
         alignItems: 'center',
         marginTop: 10,
     },
+<<<<<<< HEAD
 })
 =======
     };
@@ -330,3 +348,6 @@ const styles = StyleSheet.create({
 
 export default DashboardScreen;
 >>>>>>> LoginRedesign
+=======
+});
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d

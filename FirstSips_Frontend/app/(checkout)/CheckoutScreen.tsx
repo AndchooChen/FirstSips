@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 <<<<<<< HEAD
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
-import { TextInput, Switch, Divider } from 'react-native-paper';
+import { TextInput, Switch, Divider, ActivityIndicator } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { FIREBASE_DB } from "../auth/FirebaseConfig";
-import { doc, getDoc } from 'firebase/firestore';
+import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import PaymentComponent from '../components/PaymentComponent';
 
 type CartItem = {
 =======
@@ -41,11 +42,16 @@ interface CartItem {
 };
 
 const CheckoutScreen = () => {
+    const [customerInfo, setCustomerInfo] = useState({
+        name: '',
+        phoneNumber: '',
+        userId: '',
+    });
     const [isDelivery, setIsDelivery] = useState(false);
-    const [phoneNumber, setPhoneNumber] = useState('');
     const [pickupTime, setPickupTime] = useState('');
     const [deliveryAddress, setDeliveryAddress] = useState('');
     const [shopData, setShopData] = useState(null);
+<<<<<<< HEAD
 =======
     images?: string[];
 }
@@ -63,6 +69,10 @@ const CheckoutScreen = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
 >>>>>>> LoginRedesign
+=======
+    const [loading, setLoading] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     const router = useRouter();
     const params = useLocalSearchParams();
     const { items, shopId } = params;
@@ -78,14 +88,14 @@ const CheckoutScreen = () => {
             }
         }, [items]);
     
-        // Calculate totals with error handling
+            // Calculate totals with error handling
         const totals = useMemo(() => {
             const subtotal = cartItems.reduce((sum, item) => 
                 sum + (item.price * item.quantity), 0);
             const tax = subtotal * 0.0825; // 8.25% tax
             const deliveryFee = isDelivery ? 5.99 : 0;
             const total = subtotal + tax + deliveryFee;
-    
+
             return {
                 subtotal,
                 tax,
@@ -94,52 +104,86 @@ const CheckoutScreen = () => {
             };
         }, [cartItems, isDelivery]);
     
-        // Add validation for order placement
-        const handlePlaceOrder = () => {
-            if (cartItems.length === 0) {
-                alert('Please add items to your cart');
-                return;
-            }
+
+    const handlePaymentSuccess = async (result: { orderId: string; clientSecret: string }) => {
+        try {
+            // Log success and order details
+            console.log('Payment successful:', result);
     
-            if (!phoneNumber) {
-                alert('Please enter your phone number');
-                return;
-            }
-    
-            if (isDelivery && !deliveryAddress) {
-                alert('Please enter your delivery address');
-                return;
-            }
-    
-            if (!pickupTime) {
-                alert('Please select a pickup time');
-                return;
-            }
-    
-            // TODO: Implement order creation in Firebase
-            console.log('Order placed:', {
-                items: cartItems,
-                isDelivery,
-                phoneNumber,
-                pickupTime,
-                deliveryAddress,
-                shopId,
-                ...totals
+            // Store order reference in customers's history
+            const userOrderRef = doc(FIREBASE_DB, 'users', customerInfo.userId, 'orders', result.orderId);
+            await setDoc(userOrderRef, { 
+                customerId: customerInfo.userId,
+                shopId: shopId,
+                createdAt: new Date(),
             });
-        };
+
+            // Store order reference in shop's history
+            console.log(shopId)
+            const shopOrderRef = doc(FIREBASE_DB, 'shops', shopId, 'orders', result.orderId);
+            await setDoc(shopOrderRef, {
+                customerId: customerInfo.userId,
+                shopId: shopId,
+                createdAt: new Date(),
+            });
+    
+            // Navigate to success screen with order ID
+            router.push({
+                pathname: "/(checkout)/SuccessScreen",
+                params: { orderId: result.orderId }
+            });
+        } catch (error) {
+            console.error('Error handling payment success:', error);
+            alert('Error: Order was placed but there was an error saving it.');
+        }
+    };
 
     const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const tax = subtotal * 0.0825; // 8.25% tax
     const deliveryFee = isDelivery ? 5.99 : 0;
     const total = subtotal + tax + deliveryFee;
 
+    // Fetch user data
     useEffect(() => {
-        const fetchShopData = async () => {
-            const shopDoc = await getDoc(doc(FIREBASE_DB, "shops", shopId));
-            if (shopDoc.exists()) {
-                setShopData(shopDoc.data());
+        const fetchUserData = async () => {
+            const userId = FIREBASE_AUTH.currentUser?.uid; // Get the current user ID from Firebase Auth
+            if (!userId) {
+                alert('User not authenticated');
+                setLoading(false);
+                return;
+            }
+
+            // Reference to the user document in Firestore
+            const userDocRef = doc(FIREBASE_DB, 'users', userId);
+
+            try {
+                // Fetch the user document
+                const userDocSnap = await getDoc(userDocRef);
+
+                if (userDocSnap.exists()) {
+                    const userData = userDocSnap.data();
+
+                    // Concatenate firstName and lastName to get full name
+                    const name = `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
+                    const phoneNumber = userData.phoneNumber || '';
+
+                    // Update state with the fetched data
+                    setCustomerInfo({
+                        name,
+                        phoneNumber,
+                        userId,
+                    });
+                } else {
+                    alert('User data not found');
+                }
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+                alert('Failed to fetch user data');
+            } finally {
+                setLoading(false);
             }
         };
+<<<<<<< HEAD
 =======
     // Time picker state
     const [date, setDate] = useState(new Date());
@@ -448,6 +492,8 @@ const CheckoutScreen = () => {
                 setLoading(false);
             }
         };
+=======
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 
         fetchUserData();
     }, []);
@@ -455,6 +501,7 @@ const CheckoutScreen = () => {
     // Fetch shop data
     useEffect(() => {
         const fetchShopData = async () => {
+<<<<<<< HEAD
             if (!shopId) return;
 
             try {
@@ -474,6 +521,15 @@ const CheckoutScreen = () => {
                     } else {
                         setShopData(shopDataFromDB);
                     }
+=======
+            if (!shopId) return; // If no shopId, don't fetch
+
+            try {
+                const shopDoc = await getDoc(doc(FIREBASE_DB, 'shops', shopId));
+
+                if (shopDoc.exists()) {
+                    setShopData(shopDoc.data());
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                 } else {
                     alert('Shop data not found');
                 }
@@ -483,9 +539,12 @@ const CheckoutScreen = () => {
             }
         };
 
+<<<<<<< HEAD
 >>>>>>> LoginRedesign
+=======
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
         fetchShopData();
-    }, [shopId]);
+    }, [shopId]); // Runs every time the shopId changes
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -710,11 +769,14 @@ const CheckoutScreen = () => {
                 </View>
 
 <<<<<<< HEAD
+<<<<<<< HEAD
                 {/* Place Order Button */}
                 <TouchableOpacity style={styles.placeOrderButton} onPress={handlePlaceOrder}>
                     <Text style={styles.placeOrderText}>Place Order</Text>
                 </TouchableOpacity>
 =======
+=======
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                 {/* Payment Section */}
                 {isProcessing && (
                     <View style={styles.loadingContainer}>
@@ -722,6 +784,7 @@ const CheckoutScreen = () => {
                         <Text style={styles.loadingText}>Processing your order...</Text>
                     </View>
                 )}
+<<<<<<< HEAD
                 {!isProcessing && (
                     <Button
                         mode="contained"
@@ -734,6 +797,22 @@ const CheckoutScreen = () => {
                     </Button>
                 )}
 >>>>>>> LoginRedesign
+=======
+                {!isProcessing && totals && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Payment</Text>
+                        <PaymentComponent 
+                            amount={totals.total * 100}
+                            onSuccess={handlePaymentSuccess}
+                            cartItems={cartItems}
+                            shopId={shopId}
+                            pickupTime={pickupTime}
+                            customerInfo={customerInfo}
+                            setIsProcessing={setIsProcessing}
+                        />
+                    </View>
+                )}
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
             </ScrollView>
         </SafeAreaView>
     );
@@ -944,7 +1023,10 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     loadingContainer: {
         position: 'absolute',
         top: 0,
@@ -961,6 +1043,7 @@ const styles = StyleSheet.create({
         color: '#6F4E37',
         fontSize: 16,
     },
+<<<<<<< HEAD
     payButton: {
         backgroundColor: '#D4A373',
         padding: 16,
@@ -969,6 +1052,8 @@ const styles = StyleSheet.create({
         marginVertical: 16,
     },
 >>>>>>> LoginRedesign
+=======
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 });
 
 export default CheckoutScreen;

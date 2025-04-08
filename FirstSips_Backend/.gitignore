@@ -3,8 +3,12 @@ node_modules/
 
 # Environment variables
 .env
+<<<<<<< HEAD
 
 # Firebase service account
 src/config/serviceAccountKey.json
 
 .DS_Store
+=======
+.DS_Store
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d

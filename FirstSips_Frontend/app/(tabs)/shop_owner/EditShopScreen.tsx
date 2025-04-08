@@ -5,7 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import ScreenWideButton from '../../components/ScreenWideButton';
 import * as ImagePicker from 'expo-image-picker';
 import { FIREBASE_AUTH, FIREBASE_DB } from '../../auth/FirebaseConfig';
+<<<<<<< HEAD
 import { doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
+=======
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 import { useRouter } from "expo-router";
 import { collection, query, onSnapshot } from 'firebase/firestore';
 
@@ -41,16 +45,28 @@ export default function EditShopScreen() {
             alert('Not authenticated');
             return;
         }
+<<<<<<< HEAD
 
         // Fetch the user's shop ID
         const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
         const shopId = userDoc.data()?.shopId;
 
+=======
+    
+        // Fetch the user's shop ID
+        const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
+        const shopId = userDoc.data()?.shopId;
+    
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
         if (!shopId) {
             alert('Shop not found');
             return;
         }
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
         // Navigate to OrderQueueScreen with the shopId
         router.push({
             pathname: '/(tabs)/shop_owner/OrderManagementScreen',
@@ -64,15 +80,23 @@ export default function EditShopScreen() {
             alert('Not authenticated');
             return;
         }
+<<<<<<< HEAD
 
         const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
         const shopId = userDoc.data()?.shopId;
 
+=======
+    
+        const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
+        const shopId = userDoc.data()?.shopId;
+    
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
         if (!shopId) {
             alert('Please create a shop first');
             router.push("/(tabs)/shop_owner/CreateShopScreen");
             return;
         }
+<<<<<<< HEAD
 
         router.push("/(tabs)/shop_owner/AddItemScreen");
     };
@@ -102,6 +126,12 @@ export default function EditShopScreen() {
         }
     };
 
+=======
+    
+        router.push("/(tabs)/shop_owner/AddItemScreen");
+    };
+
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     const handleSaveChanges = async () => {
         try {
             const userId = FIREBASE_AUTH.currentUser?.uid;
@@ -123,7 +153,11 @@ export default function EditShopScreen() {
             await updateDoc(doc(FIREBASE_DB, "shops", shopId), {
                 shopName,
                 isOpen,
+<<<<<<< HEAD
                 profileImage: profileImage || null,
+=======
+                profileImage,
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                 updatedAt: new Date().toISOString()
             });
 
@@ -145,7 +179,11 @@ export default function EditShopScreen() {
             if (!shopId) return;
 
             const itemsQuery = query(collection(FIREBASE_DB, `shops/${shopId}/items`));
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
             const unsubscribe = onSnapshot(itemsQuery, (snapshot) => {
                 const itemsList = [];
                 snapshot.forEach((doc) => {
@@ -163,13 +201,21 @@ export default function EditShopScreen() {
     return (
         <View style={styles.background}>
             <View style={styles.header}>
+<<<<<<< HEAD
                 <TouchableOpacity onPress={handleHomePress} style={styles.headerButton}>
+=======
+                <TouchableOpacity onPress={handleHomePress}>
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                     <Ionicons name="home" size={24} color="#6F4E37" />
                 </TouchableOpacity>
 
                 <Text style={styles.headerTitle}>Edit Shop</Text>
 
+<<<<<<< HEAD
                 <TouchableOpacity onPress={handleOrderQueuePress} style={styles.headerButton}>
+=======
+                <TouchableOpacity onPress={handleOrderQueuePress} style={styles.queueButton}>
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                     <Ionicons name="list" size={24} color="#6F4E37" />
                 </TouchableOpacity>
             </View>
@@ -194,6 +240,7 @@ export default function EditShopScreen() {
             </View>
 
             {/* Shop Status Section */}
+<<<<<<< HEAD
             <TouchableOpacity
                 style={[styles.statusButton, isOpen ? styles.openButton : styles.closedButton]}
                 onPress={() => setIsOpen(!isOpen)}
@@ -202,11 +249,22 @@ export default function EditShopScreen() {
                     {isOpen ? 'OPEN' : 'CLOSED'}
                 </Text>
             </TouchableOpacity>
+=======
+            <View style={styles.statusContainer}>
+                <Text style={styles.statusText}>Shop is {isOpen ? 'Open' : 'Closed'}</Text>
+                <Switch
+                    value={isOpen}
+                    onValueChange={setIsOpen}
+                    color="#D4A373"
+                />
+            </View>
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 
             {/* Products List */}
             <Text style={styles.sectionTitle}>Products</Text>
             <View style={styles.productsList}>
                 {items.map((item) => (
+<<<<<<< HEAD
                     <View key={item.id} style={styles.productCardContainer}>
                         <TouchableOpacity
                             style={styles.productCard}
@@ -253,6 +311,44 @@ export default function EditShopScreen() {
                             <Ionicons name="trash-outline" size={24} color="#FF6B6B" />
                         </TouchableOpacity>
                     </View>
+=======
+                    <TouchableOpacity 
+                        key={item.id} 
+                        style={styles.productCard}
+                        onPress={async () => {
+                            const userId = FIREBASE_AUTH.currentUser?.uid;
+                            if (!userId) return;
+                            
+                            // Fetch user document
+                            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
+                            const shopId = userDoc.data()?.shopId;
+                            
+                            if (!shopId) {
+                                alert('Shop not found');
+                                return;
+                            }
+                
+                            router.push({
+                                pathname: "/(tabs)/shop_owner/EditItemScreen",
+                                params: { shopId: shopId, itemId: item.id }
+                            });
+                        }}
+                    >
+                        <Image 
+                            source={
+                                item.images?.[0] 
+                                    ? { uri: item.images[0] }
+                                    : require('../../assets/images/no_item_image.png')
+                            }
+                            style={styles.productImage}
+                            defaultSource={require('../../assets/images/no_item_image.png')}
+                        />
+                        <View style={styles.productInfo}>
+                            <Text style={styles.productName}>{item.name}</Text>
+                            <Text style={styles.productPrice}>${item.price}</Text>
+                        </View>
+                    </TouchableOpacity>
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                 ))}
             </View>
 
@@ -309,19 +405,33 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
+<<<<<<< HEAD
         justifyContent: 'space-between',
         marginBottom: 24,
         paddingTop: 40,
         paddingHorizontal: 16,
+=======
+        marginBottom: 24,
+        paddingTop: 40,
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     },
     headerTitle: {
         fontSize: 24,
         fontWeight: 'bold',
+<<<<<<< HEAD
         color: '#6F4E37',
         flex: 1,
         textAlign: 'center',
     },
     headerButton: {
+=======
+        marginLeft: 16,
+        color: '#6F4E37',
+    },
+    queueButton: {
+        position: 'absolute',
+        right: 16,
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
         padding: 8,
     },
     imageContainer: {
@@ -355,6 +465,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#6F4E37',
     },
+<<<<<<< HEAD
     statusButton: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -374,6 +485,20 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#FFFFFF',
+=======
+    statusContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#FFFFFF',
+        padding: 16,
+        borderRadius: 8,
+        marginTop: 24,
+    },
+    statusText: {
+        fontSize: 16,
+        color: '#6F4E37',
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     },
     sectionTitle: {
         fontSize: 18,
@@ -387,6 +512,7 @@ const styles = StyleSheet.create({
         marginTop: 16,
         gap: 12,
     },
+<<<<<<< HEAD
     productCardContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -394,12 +520,16 @@ const styles = StyleSheet.create({
     },
     productCard: {
         flex: 1,
+=======
+    productCard: {
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
         flexDirection: 'row',
         backgroundColor: '#FFFFFF',
         borderRadius: 8,
         padding: 12,
         alignItems: 'center',
     },
+<<<<<<< HEAD
     deleteButton: {
         padding: 10,
         marginLeft: 8,
@@ -411,6 +541,8 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#666666',
     },
+=======
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     productImage: {
         width: 60,
         height: 60,

@@ -34,6 +34,7 @@ export interface Item {
     imageUrl?: string;
     createdAt: string;
 <<<<<<< HEAD
+<<<<<<< HEAD
 }
 
 type Order = {
@@ -60,3 +61,6 @@ type Order = {
 =======
 }
 >>>>>>> LoginRedesign
+=======
+}
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d

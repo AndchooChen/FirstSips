@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Switch } from 'react-native';
 import { useState, useEffect } from 'react';
 import { TextInput, Text, Button } from 'react-native-paper';
+=======
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { useState, useEffect } from 'react';
+import { TextInput, Text } from 'react-native-paper';
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { FIREBASE_DB } from '../../auth/FirebaseConfig';
@@ -15,6 +21,7 @@ export default function EditItemScreen() {
     const [description, setDescription] = useState('');
     const [price, setPrice] = useState('');
     const [quantity, setQuantity] = useState('');
+<<<<<<< HEAD
     const [isUnlimited, setIsUnlimited] = useState(false);
     const [isHidden, setIsHidden] = useState(false);
     const [images, setImages] = useState<string[]>([]);
@@ -41,6 +48,13 @@ export default function EditItemScreen() {
     }, []);
 
     useEffect(() => {
+=======
+    const [images, setImages] = useState<string[]>([]);
+    
+    const router = useRouter();
+
+    useEffect(() => {
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
         const fetchItem = async () => {
             const itemDoc = await getDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`));
             if (itemDoc.exists()) {
@@ -49,6 +63,7 @@ export default function EditItemScreen() {
                 setCategory(data.category);
                 setDescription(data.description);
                 setPrice(data.price.toString());
+<<<<<<< HEAD
                 if (data.quantity === -1) {
                     setIsUnlimited(true);
                     setQuantity('');
@@ -58,6 +73,9 @@ export default function EditItemScreen() {
                 } else {
                     setQuantity(data.quantity.toString());
                 }
+=======
+                setQuantity(data.quantity.toString());
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                 setImages(data.images || []);
             }
         };
@@ -81,6 +99,7 @@ export default function EditItemScreen() {
         setImages(images.filter((_, i) => i !== index));
     };
 
+<<<<<<< HEAD
     const incrementQuantity = () => {
         if (isUnlimited || isHidden) return;
         const currentQuantity = quantity === '' ? 0 : parseInt(quantity);
@@ -130,12 +149,20 @@ export default function EditItemScreen() {
                 finalQuantity = quantity === '' ? 0 : parseInt(quantity);
             }
 
+=======
+    const handleUpdateItem = async () => {
+        try {
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
             await updateDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`), {
                 name,
                 category,
                 description,
                 price: parseFloat(price),
+<<<<<<< HEAD
                 quantity: finalQuantity,
+=======
+                quantity: parseInt(quantity),
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                 images,
                 updatedAt: new Date().toISOString()
             });
@@ -193,6 +220,7 @@ export default function EditItemScreen() {
                     style={styles.input}
                 />
 
+<<<<<<< HEAD
                 {/* Quantity Section */}
                 <Text style={styles.sectionTitle}>Inventory Management</Text>
 
@@ -246,6 +274,16 @@ export default function EditItemScreen() {
                         </View>
                     </View>
                 )}
+=======
+                <TextInput
+                    label="Quantity"
+                    value={quantity}
+                    onChangeText={setQuantity}
+                    mode="outlined"
+                    keyboardType="number-pad"
+                    style={styles.input}
+                />
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 
                 {/* Image Section */}
                 <Text style={styles.sectionTitle}>Product Images</Text>
@@ -253,7 +291,11 @@ export default function EditItemScreen() {
                     {images.map((uri, index) => (
                         <View key={index} style={styles.imageWrapper}>
                             <Image source={{ uri }} style={styles.imagePreview} />
+<<<<<<< HEAD
                             <TouchableOpacity
+=======
+                            <TouchableOpacity 
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                                 style={styles.removeImageButton}
                                 onPress={() => removeImage(index)}
                             >
@@ -304,6 +346,7 @@ const styles = StyleSheet.create({
     multilineInput: {
         height: 100,
     },
+<<<<<<< HEAD
     toggleContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -345,6 +388,8 @@ const styles = StyleSheet.create({
         marginHorizontal: 12,
         backgroundColor: '#FFFFFF',
     },
+=======
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     sectionTitle: {
         fontSize: 18,
         fontWeight: '600',

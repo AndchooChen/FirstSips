@@ -13,7 +13,10 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+<<<<<<< HEAD
     "firebase-admin": "^13.2.0",
+=======
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     "stripe": "^17.7.0"
   }
 }

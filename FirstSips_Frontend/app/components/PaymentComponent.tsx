@@ -5,7 +5,10 @@ import { Button } from 'react-native-paper';
 import { addDoc, collection } from 'firebase/firestore';
 import { FIREBASE_DB } from '../auth/FirebaseConfig';
 import { OrderStatus } from '../types/order';
+<<<<<<< HEAD
 import { API_URL } from '../config/api';
+=======
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 
 interface CartItem {
   id: string;
@@ -75,9 +78,14 @@ const PaymentComponent = ({
     try {
       setIsProcessing(true);
       
+<<<<<<< HEAD
       // Create Payment Intent using payment-sheet endpoint
       console.log(`${API_URL}/payments/payment-sheet`);
       const response = await fetch(`${API_URL}/payments/payment-sheet`, {
+=======
+      // Create Payment Intent
+      const response = await fetch(`http://192.168.50.84:5000/payments/create-payment-intent`, {
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -85,6 +93,7 @@ const PaymentComponent = ({
         body: JSON.stringify({
           amount: Math.round(amount),
           currency: 'usd',
+<<<<<<< HEAD
           customerId: customerInfo.userId,
           shopId
         }),
@@ -96,13 +105,23 @@ const PaymentComponent = ({
       }
 
       const { paymentIntent, ephemeralKey, customer } = await response.json();
+=======
+        }),
+      });
+
+      const { clientSecret, paymentIntentId } = await response.json();
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 
       // Initialize Payment Sheet
       const { error: initError } = await initPaymentSheet({
         merchantDisplayName: 'FirstSips',
+<<<<<<< HEAD
         paymentIntentClientSecret: paymentIntent,
         customerEphemeralKeySecret: ephemeralKey,
         customerId: customer,
+=======
+        paymentIntentClientSecret: clientSecret,
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
         defaultBillingDetails: {
           name: customerInfo.name,
         },
@@ -120,10 +139,17 @@ const PaymentComponent = ({
       }
 
       // Create order in Firestore
+<<<<<<< HEAD
       const orderId = await createOrder(paymentIntent);
       
       Alert.alert('Success', 'Payment completed!');
       onSuccess({ orderId, clientSecret: paymentIntent });
+=======
+      const orderId = await createOrder(paymentIntentId);
+      
+      Alert.alert('Success', 'Payment completed!');
+      onSuccess({ orderId, clientSecret });
+>>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 
     } catch (error: any) {
       Alert.alert('Error', error.message);
