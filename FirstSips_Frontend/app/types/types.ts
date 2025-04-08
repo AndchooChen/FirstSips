@@ -33,6 +33,7 @@ export interface Item {
     category: string;
     imageUrl?: string;
     createdAt: string;
+<<<<<<< HEAD
 }
 
 type Order = {
@@ -56,3 +57,6 @@ type Order = {
     createdAt: string;
     updatedAt: string;
   };
+=======
+}
+>>>>>>> LoginRedesign

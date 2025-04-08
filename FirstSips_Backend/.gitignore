@@ -1,7 +1,10 @@
+# Dependencies
 node_modules/
+
+# Environment variables
 .env
-/src/config/serviceAccountKey.json
+
+# Firebase service account
+src/config/serviceAccountKey.json
+
 .DS_Store
-coverage/
-dist/
-build/

@@ -1,22 +1,38 @@
 import { View, StyleSheet, KeyboardAvoidingView, ScrollView, Platform, Text, TouchableOpacity } from "react-native";
 import { useState } from "react";
+<<<<<<< HEAD
 import { TextInput, Switch } from 'react-native-paper';
+=======
+import { TextInput } from 'react-native-paper';
+>>>>>>> LoginRedesign
 import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { formatBirthday, formatPhoneNumber, validateForm } from "../utils/signUpUtils"
 import ScreenWideButton from "../components/ScreenWideButton";
+<<<<<<< HEAD
 import { useRouter } from "expo-router";
+=======
+import { useLocalSearchParams, useRouter } from "expo-router";
+>>>>>>> LoginRedesign
 import { Ionicons } from '@expo/vector-icons';
 
 const SignUpScreen = () => {
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
     const [phoneNumber, setPhoneNumber] = useState("");
+<<<<<<< HEAD
     const [birthday, setBirthday] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isShopOwner, setIsShopOwner] = useState(false);
+=======
+    // const [birthday, setBirthday] = useState("");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const params = useLocalSearchParams();
+    const isShopOwner = params.isShopOwner === 'true';
+>>>>>>> LoginRedesign
 
     const router = useRouter();
     const auth = FIREBASE_AUTH;
@@ -27,6 +43,7 @@ const SignUpScreen = () => {
         }
 
         try {
+<<<<<<< HEAD
             const userCrediential = await createUserWithEmailAndPassword(auth, email, password);
             const user = userCrediential.user;
 
@@ -49,6 +66,35 @@ const SignUpScreen = () => {
             if (isShopOwner) {
                 router.push("../(tabs)/shop/CreateShopScreen");
             } else {
+=======
+            if (isShopOwner) {
+                router.push({
+                    pathname: "../(tabs)/shop_owner/CreateShopScreen",
+                    params: { 
+                        firstName: firstName,
+                        lastName: lastName,
+                        email: email,
+                        password: password,
+                        phoneNumber: phoneNumber,
+                        isShopOwner: params.isShopOwner,
+                    }
+                });
+            } else {
+                const userCrediential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCrediential.user;
+                
+                await setDoc(doc(FIREBASE_DB, "users", user.uid), {
+                    firstName,
+                    lastName,
+                    email,
+                    phoneNumber,
+                    // birthday,
+                    isShopOwner: params.isShopOwner,
+                    createdAt: new Date().toISOString(),
+                    shopId: null,
+                });
+
+>>>>>>> LoginRedesign
                 router.push("../(tabs)/dashboard/DashboardScreen");
             }
         }
@@ -59,7 +105,10 @@ const SignUpScreen = () => {
     }
 
     return (
+<<<<<<< HEAD
         
+=======
+>>>>>>> LoginRedesign
         <KeyboardAvoidingView 
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.background}
@@ -97,6 +146,10 @@ const SignUpScreen = () => {
                         keyboardType="numeric"
                         maxLength={14}
                     />
+<<<<<<< HEAD
+=======
+                    {/*
+>>>>>>> LoginRedesign
                     <TextInput 
                         label="Birthday"
                         value={birthday}
@@ -106,6 +159,10 @@ const SignUpScreen = () => {
                         keyboardType="numeric"
                         maxLength={10}
                     />
+<<<<<<< HEAD
+=======
+                    */}
+>>>>>>> LoginRedesign
                     <TextInput 
                         label = "Email"
                         value = {email}
@@ -119,6 +176,7 @@ const SignUpScreen = () => {
                         mode = "outlined"
                         secureTextEntry = {true}
                     />
+<<<<<<< HEAD
                     <View style={styles.switchContainer}>
                         <Text>I want to create a cofee shop</Text>
                         <Switch
@@ -128,6 +186,13 @@ const SignUpScreen = () => {
                     </View>
                     <ScreenWideButton
                         text="Create Account"
+=======
+                    <View style={{padding: 4}}></View>
+                    
+                    {}
+                    <ScreenWideButton
+                        text={isShopOwner ? "Continue to shop" : "Sign up"}
+>>>>>>> LoginRedesign
                         onPress={signUp}
                         color="#D4A373"
                         textColor="#000000"
