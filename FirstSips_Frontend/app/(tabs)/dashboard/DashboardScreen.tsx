@@ -4,7 +4,8 @@ import { FIREBASE_AUTH, FIREBASE_DB } from '../../auth/FirebaseConfig';
 import { collection, query, getDocs } from 'firebase/firestore';
 import ShopCard from '../../components/ShopCard';
 import { useRouter } from 'expo-router';
-import ScreenWideButton from "../../components/ScreenWideButton";
+import { Menu, IconButton } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Shop {
     id: string;
@@ -18,13 +19,14 @@ const DashboardScreen = () => {
     const [openShops, setOpenShops] = useState<Shop[]>([]);
     const [closedShops, setClosedShops] = useState<Shop[]>([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [menuVisible, setMenuVisible] = useState(false);
     const router = useRouter();
 
     const fetchShops = async () => {
         try {
             const shopsQuery = query(collection(FIREBASE_DB, 'shops'));
             const querySnapshot = await getDocs(shopsQuery);
-            
+
             const openShopsList: Shop[] = [];
             const closedShopsList: Shop[] = [];
 
@@ -72,32 +74,53 @@ const DashboardScreen = () => {
     };
 
     return (
-        <ScrollView 
+        <ScrollView
             style={styles.container}
             refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
         >
-            <Text style={styles.header}>FirstSips</Text>
-            <View style={styles.buttonContainer}>
-                <ScreenWideButton
-                    text="Edit Shop"
-                    textColor="#FFFFFF"
-                    color="#D4A373"
-                    onPress={handleShopAction}
-                />
-                <ScreenWideButton
-                    text="Order History"
-                    textColor="#FFFFFF"
-                    color="#6A8CAF"
-                    onPress={handleOrderHistory}
-                />
-                <ScreenWideButton
-                    text="Logout"
-                    textColor="#FFFFFF"
-                    color="#654942"
-                    onPress={handleLogout}
-                />
+            <View style={styles.headerContainer}>
+                <Text style={styles.header}>FirstSips</Text>
+                <Menu
+                    visible={menuVisible}
+                    onDismiss={() => setMenuVisible(false)}
+                    anchor={
+                        <IconButton
+                            icon={({ size }) => (
+                                <Ionicons name="menu" size={size} color="#6F4E37" />
+                            )}
+                            size={24}
+                            onPress={() => setMenuVisible(true)}
+                            style={styles.menuButton}
+                        />
+                    }
+                >
+                    <Menu.Item
+                        onPress={() => {
+                            setMenuVisible(false);
+                            handleShopAction();
+                        }}
+                        title="Edit Shop"
+                        leadingIcon="pencil"
+                    />
+                    <Menu.Item
+                        onPress={() => {
+                            setMenuVisible(false);
+                            handleOrderHistory();
+                        }}
+                        title="Order History"
+                        leadingIcon="history"
+                    />
+                    <Menu.Item
+                        onPress={() => {
+                            setMenuVisible(false);
+                            handleLogout();
+                        }}
+                        title="Logout"
+                        leadingIcon="logout"
+                    />
+                </Menu>
             </View>
             {/* Open Shops Section */}
             <View style={styles.section}>
@@ -146,17 +169,20 @@ const styles = StyleSheet.create({
         backgroundColor: '#F5EDD8',
         width: "100%",
     },
-    header: {
+    headerContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
         marginTop: 40,
         marginBottom: 20,
+    },
+    header: {
         fontSize: 24,
         fontWeight: 'bold',
-        textAlign: 'center',
     },
-    buttonContainer: {
-        gap: 10,
-        paddingHorizontal: 16,
-        marginBottom: 20,
+    menuButton: {
+        margin: 0,
     },
     section: {
         padding: 16,

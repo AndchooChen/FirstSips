@@ -37,6 +37,7 @@ const ShopScreen = () => {
   const [items, setItems] = useState<ShopItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     // Fetch shop details
@@ -105,6 +106,11 @@ const ShopScreen = () => {
     }
   };
 
+  const filteredItems = items.filter(item => 
+    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -123,67 +129,75 @@ const ShopScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView>
-        <SafeAreaView style={styles.safeArea}>
-          <View style={styles.profile}>
-            <Image
-              source={
-                shopData?.profileImage 
-                  ? { uri: shopData.profileImage }
-                  : require("../../assets/images/no_shop_image.png")
-              }
-              style={styles.avatar}
-            />
-            <Text style={styles.storeName}>{shopName}</Text>
-            <Text style={styles.description}>{shopDescription}</Text>
-          </View>
-
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color="#aaa" />
-            <TextInput
-              placeholder="Search Store"
-              style={styles.searchInput}
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          <View style={styles.toggleContainer}>
-            <TouchableOpacity style={styles.toggleButton}>
-              <Text>Pickup</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.toggleButton}>
-              <Text>Delivery</Text>
-            </TouchableOpacity>
-          </View>
-
-          <FlatList
-            data={items}
-            renderItem={({ item }) => (
-              <ItemCard
-                name={item.name}
-                description={item.description}
-                price={item.price}
-                image={item.images?.[0] 
-                  ? { uri: item.images[0] }
-                  : require("../../assets/images/no_item_image.png")}
-                onAddToCart={(quantity) => handleAddToCart(item, quantity)}
-              />
-            )}
-            keyExtractor={(item) => item.id}
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.shopInfo}>
+          <Image
+            source={
+              shopData?.profileImage 
+                ? { uri: shopData.profileImage }
+                : require("../../assets/images/no_shop_image.png")
+            }
+            style={styles.shopImage}
           />
+          <Text style={styles.shopName}>{shopName}</Text>
+          <Text style={styles.shopDescription}>{shopDescription}</Text>
+        </View>
 
-          <View style={styles.checkoutContainer}>
-            <TouchableOpacity 
-              style={styles.checkoutButton}
-              onPress={handleCheckout}
-            >
-              <Text style={styles.checkoutText}>
-                Proceed to Checkout ({cartItems.reduce((total, item) => total + item.quantity, 0)} items)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+          <TextInput
+            placeholder="Search items..."
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#999"
+          />
+        </View>
+
+        <View style={styles.deliveryOptions}>
+          <TouchableOpacity style={[styles.deliveryOption, styles.activeOption]}>
+            <Text style={styles.optionText}>Pickup</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.deliveryOption}>
+            <Text style={styles.optionText}>Delivery</Text>
+          </TouchableOpacity>
+        </View>
+
+        <FlatList
+          data={filteredItems}
+          renderItem={({ item }) => (
+            <ItemCard
+              name={item.name}
+              description={item.description}
+              price={item.price}
+              image={item.images?.[0] 
+                ? { uri: item.images[0] }
+                : require("../../assets/images/no_item_image.png")}
+              onAddToCart={(quantity) => handleAddToCart(item, quantity)}
+              cartQuantity={cartItems.find(cartItem => cartItem.id === item.id)?.quantity || 0}
+            />
+          )}
+          keyExtractor={(item) => item.id}
+          scrollEnabled={false}
+          contentContainerStyle={styles.itemsList}
+        />
       </ScrollView>
+
+      {cartItems.length > 0 && (
+        <View style={styles.checkoutContainer}>
+          <TouchableOpacity 
+            style={styles.checkoutButton}
+            onPress={handleCheckout}
+          >
+            <Text style={styles.checkoutText}>
+              Checkout ({cartItems.reduce((total, item) => total + item.quantity, 0)} items)
+            </Text>
+            <Text style={styles.checkoutPrice}>
+              ${cartItems.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2)}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -199,11 +213,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     backgroundColor: '#FFFFFF',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    marginTop: 40,
   },
   headerButton: {
     padding: 8,
@@ -215,83 +227,101 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  safeArea: {
+  scrollView: {
     flex: 1,
-    backgroundColor: "#F5F5F5",
   },
-  profile: {
+  shopInfo: {
     alignItems: "center",
-    backgroundColor: "#D3EDEB",
-    paddingBottom: 24,
-    paddingTop: 8,
+    padding: 20,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
   },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    marginBottom: 8,
+  shopImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 12,
   },
-  storeName: {
+  shopName: {
     fontSize: 20,
     fontWeight: "600",
-    color: "#3E2F1C",
+    color: "#333333",
+    marginBottom: 4,
   },
-  distance: {
+  shopDescription: {
     fontSize: 14,
-    color: "#666",
+    color: "#666666",
+    textAlign: "center",
   },
   searchContainer: {
     flexDirection: "row",
-    backgroundColor: "#fff",
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 30,
-    paddingHorizontal: 12,
     alignItems: "center",
-    height: 40,
+    backgroundColor: "#FFFFFF",
+    margin: 16,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#E0E0E0",
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
+    height: 40,
+    fontSize: 16,
+    color: "#333333",
   },
-  toggleContainer: {
+  deliveryOptions: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 12,
-    gap: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
-  toggleButton: {
-    backgroundColor: "#eee",
+  deliveryOption: {
     paddingHorizontal: 20,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 20,
+    marginHorizontal: 8,
+    backgroundColor: "#F5F5F5",
   },
-  description: {
+  activeOption: {
+    backgroundColor: "#6F4E37",
+  },
+  optionText: {
     fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    paddingHorizontal: 16,
-    marginTop: 4,
+    fontWeight: "500",
+    color: "#666666",
+  },
+  itemsList: {
+    paddingBottom: 100,
   },
   checkoutContainer: {
     position: "absolute",
-    bottom: 20,
-    left: 16,
-    right: 16,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E0E0E0",
   },
   checkoutButton: {
     backgroundColor: "#6F4E37",
-    paddingVertical: 14,
-    borderRadius: 20,
+    borderRadius: 8,
+    padding: 16,
     alignItems: "center",
   },
   checkoutText: {
-    color: "#fff",
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  checkoutPrice: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    marginTop: 4,
   },
 });
 

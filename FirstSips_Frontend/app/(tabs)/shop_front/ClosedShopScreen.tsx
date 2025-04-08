@@ -31,13 +31,11 @@ export default function ClosedShopScreen() {
             if (!shopId) return;
 
             try {
-                // Fetch shop details
                 const shopDoc = await getDoc(doc(FIREBASE_DB, 'shops', shopId as string));
                 if (shopDoc.exists()) {
                     setShop(shopDoc.data() as Shop);
                 }
 
-                // Fetch shop items
                 const itemsQuery = query(collection(FIREBASE_DB, `shops/${shopId}/items`));
                 const itemsSnapshot = await getDocs(itemsQuery);
                 const itemsList: ShopItem[] = [];
@@ -72,7 +70,6 @@ export default function ClosedShopScreen() {
 
     return (
         <View style={styles.container}>
-            {/* Header with navigation buttons */}
             <View style={styles.header}>
                 <TouchableOpacity
                     style={styles.headerButton}
@@ -89,9 +86,8 @@ export default function ClosedShopScreen() {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView>
-                {/* Shop Info */}
-                <View style={styles.shopHeader}>
+            <ScrollView style={styles.scrollView}>
+                <View style={styles.shopInfo}>
                     <Image
                         source={
                             shop.profileImage
@@ -100,18 +96,16 @@ export default function ClosedShopScreen() {
                         }
                         style={styles.shopImage}
                     />
-                    <View style={styles.shopInfo}>
-                        {shop.description && (
-                            <Text style={styles.shopDescription}>{shop.description}</Text>
-                        )}
-                        <View style={styles.closedBanner}>
-                            <Ionicons name="time" size={20} color="#F44336" />
-                            <Text style={styles.closedText}>Currently Closed</Text>
-                        </View>
+                    <Text style={styles.shopName}>{shop.shopName}</Text>
+                    {shop.description && (
+                        <Text style={styles.shopDescription}>{shop.description}</Text>
+                    )}
+                    <View style={styles.closedBanner}>
+                        <Ionicons name="time" size={20} color="#F44336" />
+                        <Text style={styles.closedText}>Currently Closed</Text>
                     </View>
                 </View>
 
-                {/* Items List */}
                 <View style={styles.itemsContainer}>
                     {items.map((item) => (
                         <View key={item.id} style={styles.itemCard}>
@@ -143,7 +137,7 @@ export default function ClosedShopScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F5EDD8',
+        backgroundColor: '#F5F5F5',
     },
     header: {
         flexDirection: 'row',
@@ -151,11 +145,9 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         padding: 16,
         backgroundColor: '#FFFFFF',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+        marginTop: 40,
     },
     headerButton: {
         padding: 8,
@@ -172,32 +164,40 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    shopHeader: {
-        padding: 16,
-        backgroundColor: '#FFFFFF',
-        flexDirection: 'row',
-        alignItems: 'center',
+    scrollView: {
+        flex: 1,
+    },
+    shopInfo: {
+        alignItems: "center",
+        padding: 20,
+        backgroundColor: "#FFFFFF",
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
     },
     shopImage: {
         width: 80,
         height: 80,
         borderRadius: 40,
-        marginRight: 16,
+        marginBottom: 12,
     },
-    shopInfo: {
-        flex: 1,
+    shopName: {
+        fontSize: 20,
+        fontWeight: "600",
+        color: "#333333",
+        marginBottom: 4,
     },
     shopDescription: {
         fontSize: 14,
-        color: '#666666',
-        marginBottom: 8,
+        color: "#666666",
+        textAlign: "center",
+        marginBottom: 12,
     },
     closedBanner: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFEBEE',
         padding: 8,
-        borderRadius: 4,
+        borderRadius: 8,
         marginTop: 8,
     },
     closedText: {
@@ -214,29 +214,32 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         overflow: 'hidden',
         opacity: 0.8,
-    },
-    itemImage: {
-        width: '100%',
-        height: 200,
-        resizeMode: 'cover',
-    },
-    itemInfo: {
+        flexDirection: 'row',
         padding: 16,
     },
+    itemImage: {
+        width: 80,
+        height: 80,
+        borderRadius: 8,
+    },
+    itemInfo: {
+        flex: 1,
+        marginLeft: 12,
+        justifyContent: 'space-between',
+    },
     itemName: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: 'bold',
-        color: '#6F4E37',
-        marginBottom: 4,
+        color: '#333333',
     },
     itemDescription: {
         fontSize: 14,
         color: '#666666',
-        marginBottom: 8,
+        marginVertical: 4,
     },
     itemPrice: {
         fontSize: 16,
-        fontWeight: '500',
+        fontWeight: '600',
         color: '#6F4E37',
     },
 });

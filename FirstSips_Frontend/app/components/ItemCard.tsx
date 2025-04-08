@@ -8,6 +8,7 @@ type ItemCardProps = {
   price: number;
   image?: any;
   onAddToCart: (quantity: number) => void;
+  cartQuantity?: number;
 };
 
 export default function ItemCard({ 
@@ -15,29 +16,34 @@ export default function ItemCard({
   description, 
   price, 
   image, 
-  onAddToCart 
+  onAddToCart,
+  cartQuantity = 0
 }: ItemCardProps) {
+  const [showControls, setShowControls] = useState(false);
   const [quantity, setQuantity] = useState(1);
 
-  const handleQuantityChange = (text: string) => {
-    const num = parseInt(text);
-    if (!isNaN(num) && num > 0) {
-      setQuantity(num);
-    }
+  const handleCardPress = () => {
+    setShowControls(!showControls);
   };
 
   const incrementQuantity = () => {
     setQuantity(prev => prev + 1);
+    onAddToCart(quantity + 1);
   };
 
   const decrementQuantity = () => {
     if (quantity > 1) {
       setQuantity(prev => prev - 1);
+      onAddToCart(quantity - 1);
     }
   };
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity 
+      style={styles.card}
+      onPress={handleCardPress}
+      activeOpacity={0.9}
+    >
       <Image 
         source={image}
         style={styles.image}
@@ -50,38 +56,32 @@ export default function ItemCard({
           <Text style={styles.price}>${price.toFixed(2)}</Text>
         </View>
         
-        <View style={styles.quantityContainer}>
-          <TouchableOpacity 
-            onPress={decrementQuantity}
-            style={styles.quantityButton}
-          >
-            <Ionicons name="remove" size={20} color="#6F4E37" />
-          </TouchableOpacity>
-          
-          <TextInput
-            style={styles.quantityInput}
-            value={quantity.toString()}
-            onChangeText={handleQuantityChange}
-            keyboardType="number-pad"
-            selectTextOnFocus
-          />
-          
-          <TouchableOpacity 
-            onPress={incrementQuantity}
-            style={styles.quantityButton}
-          >
-            <Ionicons name="add" size={20} color="#6F4E37" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => onAddToCart(quantity)}
-          >
-            <Text style={styles.addButtonText}>Add</Text>
-          </TouchableOpacity>
-        </View>
+        {showControls && (
+          <View style={styles.quantityContainer}>
+            <TouchableOpacity 
+              onPress={decrementQuantity}
+              style={styles.quantityButton}
+            >
+              <Ionicons name="remove" size={20} color="#6F4E37" />
+            </TouchableOpacity>
+            
+            <TextInput
+              style={styles.quantityInput}
+              value={cartQuantity.toString()}
+              editable={false}
+              selectTextOnFocus={false}
+            />
+            
+            <TouchableOpacity 
+              onPress={incrementQuantity}
+              style={styles.quantityButton}
+            >
+              <Ionicons name="add" size={20} color="#6F4E37" />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -89,12 +89,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     marginVertical: 8,
     marginHorizontal: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
     justifyContent: 'space-between',
   },
   textContent: {
@@ -130,33 +130,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
+    justifyContent: 'flex-end',
   },
   quantityButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#F0F0F0',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   quantityInput: {
     width: 40,
-    height: 30,
+    height: 32,
     textAlign: 'center',
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F5F5F5',
     marginHorizontal: 8,
-    borderRadius: 4,
+    borderRadius: 8,
     fontSize: 16,
-  },
-  addButton: {
-    backgroundColor: '#6F4E37',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 4,
-    marginLeft: 8,
-  },
-  addButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: '#333333',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
 });
