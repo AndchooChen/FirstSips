@@ -24,7 +24,9 @@ interface CartItem extends ShopItem {
 const ShopScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { shopId, shopName, shopDescription } = params;
+  const { shopId } = params;
+  const [shopName, setShopName] = useState<string>("");
+  const [shopDescription, setShopDescription] = useState<string>("");
   const [shopData, setShopData] = useState<DocumentData | null>(null);
   const [items, setItems] = useState<ShopItem[]>([]);
 
@@ -37,7 +39,10 @@ const ShopScreen = () => {
       try {
         const shopDoc = await getDoc(doc(FIREBASE_DB, "shops", shopId as string));
         if (shopDoc.exists()) {
-          setShopData(shopDoc.data());
+          const data = shopDoc.data();
+          setShopData(data);
+          setShopName(data.shopName || "");
+          setShopDescription(data.description || "");
         }
       } catch (error) {
         console.error("Error fetching shop:", error);

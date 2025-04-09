@@ -1,9 +1,5 @@
 import { View } from 'react-native';
 import LandingScreen from './(public)/LandingScreen';
-<<<<<<< HEAD
-
-export default function Index() {
-=======
 import * as Linking from 'expo-linking';
 import { useStripe } from '@stripe/stripe-react-native';
 import { useCallback, useEffect } from 'react';
@@ -55,7 +51,6 @@ export default function Index() {
     return () => deepLinkListener.remove();
   }, [handleDeepLink]);
 
->>>>>>> LoginRedesign
   return (
     <View style={{ flex: 1 }}>
       <LandingScreen />
