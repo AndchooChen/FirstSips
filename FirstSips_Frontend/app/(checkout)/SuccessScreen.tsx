@@ -21,7 +21,6 @@ interface OrderDetails {
   totalAmount: number;
 }
 
-
 const SuccessScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();

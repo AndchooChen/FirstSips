@@ -1,15 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-<<<<<<< HEAD
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
-import { TextInput, Switch, Divider, ActivityIndicator } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import PaymentComponent from '../components/PaymentComponent';
-
-type CartItem = {
-=======
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, Platform, Modal, Image } from 'react-native';
 import { Divider, ActivityIndicator, Button } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,27 +21,11 @@ interface ShopData {
 }
 
 interface CartItem {
->>>>>>> LoginRedesign
     id: string;
     name: string;
     price: number;
     quantity: number;
     description?: string;
-<<<<<<< HEAD
-};
-
-const CheckoutScreen = () => {
-    const [customerInfo, setCustomerInfo] = useState({
-        name: '',
-        phoneNumber: '',
-        userId: '',
-    });
-    const [isDelivery, setIsDelivery] = useState(false);
-    const [pickupTime, setPickupTime] = useState('');
-    const [deliveryAddress, setDeliveryAddress] = useState('');
-    const [shopData, setShopData] = useState(null);
-<<<<<<< HEAD
-=======
     images?: string[];
 }
 
@@ -68,123 +41,10 @@ const CheckoutScreen = () => {
     const [loading, setLoading] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
->>>>>>> LoginRedesign
-=======
-    const [loading, setLoading] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     const router = useRouter();
     const params = useLocalSearchParams();
     const { items, shopId } = params;
 
-<<<<<<< HEAD
-        // Parse cart items from params with type safety
-        const cartItems: CartItem[] = useMemo(() => {
-            try {
-                return JSON.parse(items as string || '[]');
-            } catch (error) {
-                console.error('Error parsing cart items:', error);
-                return [];
-            }
-        }, [items]);
-    
-            // Calculate totals with error handling
-        const totals = useMemo(() => {
-            const subtotal = cartItems.reduce((sum, item) => 
-                sum + (item.price * item.quantity), 0);
-            const tax = subtotal * 0.0825; // 8.25% tax
-            const deliveryFee = isDelivery ? 5.99 : 0;
-            const total = subtotal + tax + deliveryFee;
-
-            return {
-                subtotal,
-                tax,
-                deliveryFee,
-                total
-            };
-        }, [cartItems, isDelivery]);
-    
-
-    const handlePaymentSuccess = async (result: { orderId: string; clientSecret: string }) => {
-        try {
-            // Log success and order details
-            console.log('Payment successful:', result);
-    
-            // Store order reference in customers's history
-            const userOrderRef = doc(FIREBASE_DB, 'users', customerInfo.userId, 'orders', result.orderId);
-            await setDoc(userOrderRef, { 
-                customerId: customerInfo.userId,
-                shopId: shopId,
-                createdAt: new Date(),
-            });
-
-            // Store order reference in shop's history
-            console.log(shopId)
-            const shopOrderRef = doc(FIREBASE_DB, 'shops', shopId, 'orders', result.orderId);
-            await setDoc(shopOrderRef, {
-                customerId: customerInfo.userId,
-                shopId: shopId,
-                createdAt: new Date(),
-            });
-    
-            // Navigate to success screen with order ID
-            router.push({
-                pathname: "/(checkout)/SuccessScreen",
-                params: { orderId: result.orderId }
-            });
-        } catch (error) {
-            console.error('Error handling payment success:', error);
-            alert('Error: Order was placed but there was an error saving it.');
-        }
-    };
-
-    const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = subtotal * 0.0825; // 8.25% tax
-    const deliveryFee = isDelivery ? 5.99 : 0;
-    const total = subtotal + tax + deliveryFee;
-
-    // Fetch user data
-    useEffect(() => {
-        const fetchUserData = async () => {
-            const userId = FIREBASE_AUTH.currentUser?.uid; // Get the current user ID from Firebase Auth
-            if (!userId) {
-                alert('User not authenticated');
-                setLoading(false);
-                return;
-            }
-
-            // Reference to the user document in Firestore
-            const userDocRef = doc(FIREBASE_DB, 'users', userId);
-
-            try {
-                // Fetch the user document
-                const userDocSnap = await getDoc(userDocRef);
-
-                if (userDocSnap.exists()) {
-                    const userData = userDocSnap.data();
-
-                    // Concatenate firstName and lastName to get full name
-                    const name = `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
-                    const phoneNumber = userData.phoneNumber || '';
-
-                    // Update state with the fetched data
-                    setCustomerInfo({
-                        name,
-                        phoneNumber,
-                        userId,
-                    });
-                } else {
-                    alert('User data not found');
-                }
-            } catch (error) {
-                console.error('Error fetching user data:', error);
-                alert('Failed to fetch user data');
-            } finally {
-                setLoading(false);
-            }
-        };
-<<<<<<< HEAD
-=======
     // Time picker state
     const [date, setDate] = useState(new Date());
     const [showTimePicker, setShowTimePicker] = useState(false);
@@ -492,8 +352,6 @@ const CheckoutScreen = () => {
                 setLoading(false);
             }
         };
-=======
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 
         fetchUserData();
     }, []);
@@ -501,7 +359,6 @@ const CheckoutScreen = () => {
     // Fetch shop data
     useEffect(() => {
         const fetchShopData = async () => {
-<<<<<<< HEAD
             if (!shopId) return;
 
             try {
@@ -521,15 +378,6 @@ const CheckoutScreen = () => {
                     } else {
                         setShopData(shopDataFromDB);
                     }
-=======
-            if (!shopId) return; // If no shopId, don't fetch
-
-            try {
-                const shopDoc = await getDoc(doc(FIREBASE_DB, 'shops', shopId));
-
-                if (shopDoc.exists()) {
-                    setShopData(shopDoc.data());
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                 } else {
                     alert('Shop data not found');
                 }
@@ -539,12 +387,8 @@ const CheckoutScreen = () => {
             }
         };
 
-<<<<<<< HEAD
->>>>>>> LoginRedesign
-=======
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
         fetchShopData();
-    }, [shopId]); // Runs every time the shopId changes
+    }, [shopId]);
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -554,72 +398,11 @@ const CheckoutScreen = () => {
                     <Ionicons name="arrow-back" size={24} color="#6F4E37" />
                 </TouchableOpacity>
 
-<<<<<<< HEAD
-                {/* Delivery/Pickup Toggle */}
-                <View style={styles.section}>
-                    <View style={styles.toggleContainer}>
-                        <Text style={styles.toggleText}>Delivery</Text>
-                        <Switch
-                            value={isDelivery}
-                            onValueChange={setIsDelivery}
-                            color="#D4A373"
-                        />
-                    </View>
-                </View>
-
-                {/* Location Information */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
-                        {isDelivery ? 'Delivery Address' : 'Pickup Location'}
-                    </Text>
-                    {isDelivery ? (
-                        <TextInput
-                            label="Delivery Address"
-                            value={deliveryAddress}
-                            onChangeText={setDeliveryAddress}
-                            mode="outlined"
-                            style={styles.input}
-                        />
-                    ) : (
-                        <View style={styles.shopInfo}>
-                            <Text style={styles.shopName}>{shopData?.shopName}</Text>
-                            <Text style={styles.shopAddress}>{shopData?.streetAddress}</Text>
-                            <Text style={styles.shopAddress}>
-                                {shopData?.city}, {shopData?.state} {shopData?.zipCode}
-                            </Text>
-                            <Text style={styles.shopPhone}>📞 Contact: {shopData?.phoneNumber}</Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* Time Selection */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
-                        {isDelivery ? 'Delivery Time' : 'Pickup Time'}
-                    </Text>
-                    <TextInput
-                        label="Preferred Time"
-                        value={pickupTime}
-                        onChangeText={setPickupTime}
-                        mode="outlined"
-                        style={styles.input}
-                    />
-                </View>
-
-=======
->>>>>>> LoginRedesign
                 {/* Cart Items */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Order Details</Text>
                     {cartItems.map((item, index) => (
                         <View key={index} style={styles.cartItem}>
-<<<<<<< HEAD
-                            <View style={styles.itemInfo}>
-                                <Text style={styles.itemName}>{item.name}</Text>
-                                <Text style={styles.itemQuantity}>x{item.quantity}</Text>
-                            </View>
-                            <Text style={styles.itemPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
-=======
                             <Image
                                 source={item.images?.[0] ? { uri: item.images[0] } : require('../assets/images/no_item_image.png')}
                                 style={styles.itemImage}
@@ -646,13 +429,10 @@ const CheckoutScreen = () => {
                                 </View>
                             </View>
                             <Text style={styles.itemTotalPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
->>>>>>> LoginRedesign
                         </View>
                     ))}
                 </View>
 
-<<<<<<< HEAD
-=======
                 {/* Location Information */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Pickup Location</Text>
@@ -739,7 +519,6 @@ const CheckoutScreen = () => {
                     )}
                 </View>
 
->>>>>>> LoginRedesign
                 {/* Order Summary */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Order Summary</Text>
@@ -751,16 +530,6 @@ const CheckoutScreen = () => {
                         <Text>Tax</Text>
                         <Text>${totals.tax.toFixed(2)}</Text>
                     </View>
-<<<<<<< HEAD
-                    {isDelivery && (
-                        <View style={styles.summaryRow}>
-                            <Text>Delivery Fee</Text>
-                            <Text>${totals.deliveryFee.toFixed(2)}</Text>
-                        </View>
-                    )}
-=======
-
->>>>>>> LoginRedesign
                     <Divider style={styles.divider} />
                     <View style={styles.summaryRow}>
                         <Text style={styles.totalText}>Total</Text>
@@ -768,15 +537,6 @@ const CheckoutScreen = () => {
                     </View>
                 </View>
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-                {/* Place Order Button */}
-                <TouchableOpacity style={styles.placeOrderButton} onPress={handlePlaceOrder}>
-                    <Text style={styles.placeOrderText}>Place Order</Text>
-                </TouchableOpacity>
-=======
-=======
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
                 {/* Payment Section */}
                 {isProcessing && (
                     <View style={styles.loadingContainer}>
@@ -784,7 +544,6 @@ const CheckoutScreen = () => {
                         <Text style={styles.loadingText}>Processing your order...</Text>
                     </View>
                 )}
-<<<<<<< HEAD
                 {!isProcessing && (
                     <Button
                         mode="contained"
@@ -796,23 +555,6 @@ const CheckoutScreen = () => {
                         Pay ${totals.total.toFixed(2)}
                     </Button>
                 )}
->>>>>>> LoginRedesign
-=======
-                {!isProcessing && totals && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Payment</Text>
-                        <PaymentComponent 
-                            amount={totals.total * 100}
-                            onSuccess={handlePaymentSuccess}
-                            cartItems={cartItems}
-                            shopId={shopId}
-                            pickupTime={pickupTime}
-                            customerInfo={customerInfo}
-                            setIsProcessing={setIsProcessing}
-                        />
-                    </View>
-                )}
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
             </ScrollView>
         </SafeAreaView>
     );
@@ -823,12 +565,9 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5EDD8',
     },
-<<<<<<< HEAD
-=======
     backButton: {
         marginBottom: 10,
     },
->>>>>>> LoginRedesign
     container: {
         flex: 1,
         backgroundColor: '#F5EDD8',
@@ -846,24 +585,10 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         color: '#6F4E37',
     },
-<<<<<<< HEAD
-    toggleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    toggleText: {
-        fontSize: 16,
-        color: '#6F4E37',
-    },
-=======
->>>>>>> LoginRedesign
     input: {
         backgroundColor: '#FFFFFF',
         marginBottom: 8,
     },
-<<<<<<< HEAD
-=======
     timePickerButton: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -902,7 +627,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#D4A373',
         width: '100%',
     },
->>>>>>> LoginRedesign
     shopInfo: {
         marginVertical: 8,
     },
@@ -923,24 +647,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-<<<<<<< HEAD
-        marginBottom: 12,
-    },
-    itemInfo: {
-        flex: 1,
-    },
-    itemName: {
-        fontSize: 16,
-        color: '#6F4E37',
-    },
-    itemQuantity: {
-        color: '#666666',
-        marginTop: 4,
-    },
-    itemPrice: {
-        fontSize: 16,
-        fontWeight: '500',
-=======
         marginBottom: 16,
         paddingBottom: 16,
         borderBottomWidth: 1,
@@ -991,7 +697,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontSize: 16,
         color: '#333333',
->>>>>>> LoginRedesign
     },
     summaryRow: {
         flexDirection: 'row',
@@ -1022,11 +727,6 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
     },
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     loadingContainer: {
         position: 'absolute',
         top: 0,
@@ -1043,7 +743,6 @@ const styles = StyleSheet.create({
         color: '#6F4E37',
         fontSize: 16,
     },
-<<<<<<< HEAD
     payButton: {
         backgroundColor: '#D4A373',
         padding: 16,
@@ -1051,9 +750,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginVertical: 16,
     },
->>>>>>> LoginRedesign
-=======
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 });
 
 export default CheckoutScreen;

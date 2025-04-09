@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Switch } from 'react-native';
-=======
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 import { useState } from 'react';
 import { TextInput, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,11 +14,8 @@ const AddItemScreen = () => {
     const [description, setDescription] = useState('');
     const [price, setPrice] = useState('');
     const [quantity, setQuantity] = useState('');
-<<<<<<< HEAD
     const [isUnlimited, setIsUnlimited] = useState(false);
     const [isHidden, setIsHidden] = useState(false);
-=======
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     const [images, setImages] = useState<string[]>([]);
 
     const router = useRouter();
@@ -40,7 +33,6 @@ const AddItemScreen = () => {
         }
     };
 
-<<<<<<< HEAD
     const incrementQuantity = () => {
         if (isUnlimited || isHidden) return;
         const currentQuantity = quantity === '' ? 0 : parseInt(quantity);
@@ -91,38 +83,20 @@ const AddItemScreen = () => {
                 return;
             }
 
-=======
-    const handleAddItem = async () => {
-        try {
-            // Validate inputs
-            if (!name || !category || !description || !price || !quantity) {
-                alert('Please fill in all required fields');
-                return;
-            }
-    
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
             // Get current user's shop ID
             const userId = FIREBASE_AUTH.currentUser?.uid;
             if (!userId) {
                 alert('Not authenticated');
                 return;
             }
-<<<<<<< HEAD
 
             const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
             const shopId = userDoc.data()?.shopId;
 
-=======
-    
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const shopId = userDoc.data()?.shopId;
-    
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
             if (!shopId) {
                 alert('No shop found for this user');
                 return;
             }
-<<<<<<< HEAD
 
             // Create item in shop's items subcollection
             const itemRef = doc(collection(FIREBASE_DB, `shops/${shopId}/items`));
@@ -137,12 +111,6 @@ const AddItemScreen = () => {
                 finalQuantity = quantity === '' ? 0 : parseInt(quantity);
             }
 
-=======
-    
-            // Create item in shop's items subcollection
-            const itemRef = doc(collection(FIREBASE_DB, `shops/${shopId}/items`));
-            
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
             await setDoc(itemRef, {
                 itemId: itemRef.id,
                 shopId,
@@ -150,19 +118,11 @@ const AddItemScreen = () => {
                 category,
                 description,
                 price: parseFloat(price),
-<<<<<<< HEAD
                 quantity: finalQuantity,
                 images,
                 createdAt: new Date().toISOString()
             });
 
-=======
-                quantity: parseInt(quantity),
-                images,
-                createdAt: new Date().toISOString()
-            });
-    
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
             alert('Product added successfully!');
             router.push({
                 pathname: "/(tabs)/shop_owner/EditShopScreen",
@@ -221,7 +181,6 @@ const AddItemScreen = () => {
                     style={styles.input}
                 />
 
-<<<<<<< HEAD
                 {/* Quantity Section */}
                 <Text style={styles.sectionTitle}>Inventory Management</Text>
 
@@ -275,16 +234,6 @@ const AddItemScreen = () => {
                         </View>
                     </View>
                 )}
-=======
-                <TextInput
-                    label="Quantity"
-                    value={quantity}
-                    onChangeText={setQuantity}
-                    mode="outlined"
-                    keyboardType="number-pad"
-                    style={styles.input}
-                />
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 
                 {/* Image Section */}
                 <Text style={styles.sectionTitle}>Product Images</Text>
@@ -336,7 +285,6 @@ const styles = StyleSheet.create({
     multilineInput: {
         height: 100,
     },
-<<<<<<< HEAD
     toggleContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -378,8 +326,6 @@ const styles = StyleSheet.create({
         marginHorizontal: 12,
         backgroundColor: '#FFFFFF',
     },
-=======
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     sectionTitle: {
         fontSize: 18,
         fontWeight: '600',

@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import { View, StyleSheet, KeyboardAvoidingView, TouchableOpacity } from "react-native";
-=======
 import {View, StyleSheet, KeyboardAvoidingView, TouchableOpacity, Platform, ScrollView } from "react-native";
->>>>>>> LoginRedesign
 import { useState } from "react";
 import ScreenWideButton from "../components/ScreenWideButton";
 import { useRouter } from "expo-router";
@@ -21,40 +17,6 @@ const LoginScreen = () => {
     const signIn = async () => {
         setLoading(true);
         try {
-<<<<<<< HEAD
-            const userCrediential = await signInWithEmailAndPassword(auth, email, password);
-
-            // Check to see if the correct user is signed in
-            console.log(userCrediential);
-
-            setLoading(false);
-            router.push("../(tabs)/dashboard/DashboardScreen");
-        }
-        catch (error: any) {
-            setLoading(false);
-            alert('Login failed: ' + error.message);
-            //console.log(error);
-        }
-    }
-    
-    return (
-        <View style={styles.background}>
-            {/* Add Back Button */}
-            <TouchableOpacity 
-                style={styles.backButton}
-                onPress={() => router.back()}
-            >
-                <Ionicons name="arrow-back" size={24} color="#6F4E37" />
-            </TouchableOpacity>
-            <View>
-                <KeyboardAvoidingView>
-                    
-                    <TextInput
-                        label="Email"
-                        value={email}
-                        onChangeText={(email) => setEmail(email)}
-                        mode="outlined"
-=======
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             console.log(userCredential);
             setLoading(false);
@@ -86,21 +48,14 @@ const LoginScreen = () => {
                         onChangeText={setEmail}
                         mode="outlined"
                         style={styles.input}
->>>>>>> LoginRedesign
                     />
                     <TextInput
                         label="Password"
                         value={password}
-<<<<<<< HEAD
-                        onChangeText={(password) => setPassword(password)}
-                        mode="outlined"
-                        secureTextEntry={true}
-=======
                         onChangeText={setPassword}
                         mode="outlined"
                         secureTextEntry
                         style={styles.input}
->>>>>>> LoginRedesign
                     />
                     <ScreenWideButton
                         text="Login"
@@ -108,25 +63,6 @@ const LoginScreen = () => {
                         color="#D4A373"
                         textColor="#000000"
                     />
-<<<<<<< HEAD
-                    <ScreenWideButton
-                        text="Sign up here"
-                        onPress={() => router.push("./SignUpScreen")}
-                        color="#D4A373"
-                        textColor="#000000"
-                    />
-                </KeyboardAvoidingView>
-            </View>
-        </View>
-    )
-}
-
-const styles = StyleSheet.create({
-    background: {
-        backgroundColor: "#F5EDD8",
-        flex: 1,
-        justifyContent: "center",
-=======
                     <View style={{ height: 10 }} />
                     <ScreenWideButton
                         text="Create an account instead"
@@ -151,20 +87,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         paddingTop: 80,
         paddingBottom: 40,
->>>>>>> LoginRedesign
     },
     backButton: {
         position: 'absolute',
         top: 40,
         left: 16,
         padding: 8,
-<<<<<<< HEAD
-        zIndex: 1
-    }
-})
-
-export default LoginScreen;
-=======
         zIndex: 1,
     },
     form: {
@@ -178,4 +106,3 @@ export default LoginScreen;
 });
 
 export default LoginScreen;
->>>>>>> LoginRedesign

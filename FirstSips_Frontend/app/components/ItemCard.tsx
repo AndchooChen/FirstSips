@@ -1,36 +1,12 @@
-<<<<<<< HEAD
-import React from "react";
-import { View, Text, StyleSheet, Image, TouchableOpacity } from "react-native";
-=======
 import React, { useState } from "react";
 import { View, Text, StyleSheet, Image, TouchableOpacity, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
->>>>>>> LoginRedesign
 
 type ItemCardProps = {
   name: string;
   description: string;
   price: number;
   image?: any;
-<<<<<<< HEAD
-  onAddToCart: () => void;
-};
-
-export default function ItemCard({ 
-  name, 
-  description, 
-  price, 
-  image, 
-  onAddToCart 
-}: ItemCardProps) {
-  return (
-    <TouchableOpacity 
-      style={styles.card}
-      onPress={onAddToCart}
-      activeOpacity={0.7}
-    >
-      <Image 
-=======
   onAddToCart: (quantity: number) => void;
   cartQuantity?: number;
 };
@@ -46,7 +22,16 @@ export default function ItemCard({
   const [showControls, setShowControls] = useState(false);
 
   const handleCardPress = () => {
-    setShowControls(!showControls);
+    if (!showControls) {
+      // First press - add item to cart and show controls
+      if (cartQuantity === 0) {
+        onAddToCart(1);
+      }
+      setShowControls(true);
+    } else {
+      // Already showing controls - just add one more
+      onAddToCart(1);
+    }
   };
 
   const incrementQuantity = () => {
@@ -61,20 +46,15 @@ export default function ItemCard({
     <TouchableOpacity
       style={styles.card}
       onPress={handleCardPress}
+      onLongPress={() => setShowControls(!showControls)}
       activeOpacity={0.9}
     >
       <Image
->>>>>>> LoginRedesign
         source={image}
         style={styles.image}
         defaultSource={require('../assets/images/no_item_image.png')}
       />
       <View style={styles.content}>
-<<<<<<< HEAD
-        <Text style={styles.name}>{name}</Text>
-        <Text style={styles.description}>{description}</Text>
-        <Text style={styles.price}>${price.toFixed(2)}</Text>
-=======
         <View style={styles.textContent}>
           <Text style={styles.name}>{name}</Text>
           <Text style={styles.description}>{description}</Text>
@@ -105,7 +85,6 @@ export default function ItemCard({
             </TouchableOpacity>
           </View>
         )}
->>>>>>> LoginRedesign
       </View>
     </TouchableOpacity>
   );
@@ -115,17 +94,6 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-<<<<<<< HEAD
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 8,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-    alignItems: 'center',
-=======
     borderRadius: 12,
     padding: 16,
     marginVertical: 8,
@@ -134,7 +102,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
->>>>>>> LoginRedesign
   },
   image: {
     width: 80,
@@ -143,18 +110,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-<<<<<<< HEAD
-    marginLeft: 10,
-    justifyContent: 'space-between',
-  },
-=======
     marginLeft: 12,
     justifyContent: 'space-between',
   },
   textContent: {
     flex: 1,
   },
->>>>>>> LoginRedesign
   name: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -170,8 +131,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#6F4E37',
   },
-<<<<<<< HEAD
-=======
   quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -200,5 +159,4 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
->>>>>>> LoginRedesign
 });
