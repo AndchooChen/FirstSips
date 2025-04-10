@@ -3,8 +3,7 @@ import { Text, Button, Surface, ActivityIndicator } from 'react-native-paper';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
-import { FIREBASE_DB } from "../auth/FirebaseConfig";
-import { doc, getDoc } from 'firebase/firestore';
+import { supabase } from '../utils/supabase';
 
 interface OrderDetails {
   orderId: string;
@@ -27,27 +26,47 @@ const SuccessScreen = () => {
   const [orderData, setOrderData] = useState<OrderDetails | null>(null);
   const [shopData, setShopData] = useState<any>(null);
 
-  useEffect(() => {
-    const fetchOrderDetails = async () => {
-      if (params.orderId) {
-        const orderDoc = await getDoc(doc(FIREBASE_DB, "orders", params.orderId as string));
-        if (orderDoc.exists()) {
-          const data = orderDoc.data();
-          setOrderData({
-            ...data,
-            orderId: orderDoc.id,
-            pickupTime: data.pickupTime,
-          } as OrderDetails);
+  const getOrderDetails = async () => {
+    if (!params.orderId) {
+      return;
+    }
 
-          // Fetch shop data after getting order
-          const shopDoc = await getDoc(doc(FIREBASE_DB, "shops", data.shopId));
-          if (shopDoc.exists()) {
-            setShopData(shopDoc.data());
-          }
-        }
-      }
-    };
-    fetchOrderDetails();
+    // Fetch order by ID
+    const { data: orderData, error: orderError } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', params.orderId)
+      .single();
+
+    if (orderError || !orderData) {
+      console.error('Error fetching order:', orderError);
+      return;
+    }
+
+    setOrderData({
+      ...orderData,
+      orderId: orderData.id,
+      pickupTime: orderData.pickup_time,
+    });
+
+    // Fetch realted shop using shop_id from the order
+    const { data: shopData, error: shopError } = await supabase
+      .from("shops")
+      .select("*")
+      .eq("id", orderData.shop_id)
+      .single();
+
+    if (shopError || !shopData) {
+      console.error('Error fetching shop:', shopError);
+      return;
+    }
+
+    setShopData(shopData);
+  }
+
+
+  useEffect(() => {
+    getOrderDetails();
   }, [params.orderId]);
 
   if (!orderData || !shopData) {

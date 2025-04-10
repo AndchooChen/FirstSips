@@ -4,10 +4,8 @@ import { TextInput, Portal, Modal } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenWideButton from '../../components/ScreenWideButton';
 import * as ImagePicker from 'expo-image-picker';
-import { FIREBASE_AUTH, FIREBASE_DB } from '../../auth/FirebaseConfig';
-import { doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { useRouter } from "expo-router";
-import { collection, query, onSnapshot } from 'firebase/firestore';
+import { supabase } from '@/app/utils/supabase';
 
 export default function EditShopScreen() {
     const [shopName, setShopName] = useState("My Coffee Shop");
@@ -36,129 +34,177 @@ export default function EditShopScreen() {
     };
 
     const handleOrderQueuePress = async () => {
-        const userId = FIREBASE_AUTH.currentUser?.uid;
-        if (!userId) {
-            alert('Not authenticated');
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
+      
+        if (!user) {
+            alert("Not authenticated");
             return;
         }
-
-        // Fetch the user's shop ID
-        const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-        const shopId = userDoc.data()?.shopId;
-
-        if (!shopId) {
-            alert('Shop not found');
+      
+        const { data, error } = await supabase
+            .from("users")
+            .select("shop_id")
+            .eq("id", user.id)
+            .single();
+      
+        if (error || !data?.shop_id) {
+            alert("Shop not found");
             return;
         }
-
-        // Navigate to OrderQueueScreen with the shopId
+      
         router.push({
-            pathname: '/(tabs)/shop_owner/OrderManagementScreen',
-            params: { shopId },
+            pathname: "/(tabs)/shop_owner/OrderManagementScreen",
+            params: { shopId: data.shop_id },
         });
     };
+      
 
     const handleAddProduct = async () => {
-        const userId = FIREBASE_AUTH.currentUser?.uid;
-        if (!userId) {
-            alert('Not authenticated');
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
+      
+        if (!user) {
+            alert("Not authenticated");
             return;
         }
-
-        const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-        const shopId = userDoc.data()?.shopId;
-
-        if (!shopId) {
-            alert('Please create a shop first');
+      
+        const { data, error } = await supabase
+            .from("users")
+            .select("shop_id")
+            .eq("id", user.id)
+            .single();
+      
+        if (error || !data?.shop_id) {
+            alert("Please create a shop first");
             router.push("/(tabs)/shop_owner/CreateShopScreen");
             return;
         }
-
+      
         router.push("/(tabs)/shop_owner/AddItemScreen");
-    };
+      };
+      
 
     const handleDeleteItem = async (itemId: string) => {
-        const userId = FIREBASE_AUTH.currentUser?.uid;
-        if (!userId) return;
-
-        // Fetch user document
-        const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-        const shopId = userDoc.data()?.shopId;
-
-        if (!shopId) {
-            alert('Shop not found');
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
+      
+        if (!user) return;
+      
+        const { data, error } = await supabase
+            .from("users")
+            .select("shop_id")
+            .eq("id", user.id)
+            .single();
+      
+        if (error || !data?.shop_id) {
+            alert("Shop not found");
             return;
         }
-
-        // Confirm deletion
-        if (confirm('Are you sure you want to delete this item?')) {
-            try {
-                await deleteDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`));
-                alert('Item deleted successfully');
-            } catch (error) {
-                console.error('Error deleting item:', error);
-                alert('Failed to delete item');
+      
+        if (confirm("Are you sure you want to delete this item?")) {
+            const { error: deleteError } = await supabase
+                .from("items")
+                .delete()
+                .eq("id", itemId)
+                .eq("shop_id", data.shop_id);
+      
+            if (deleteError) {
+                console.error("Error deleting item:", deleteError);
+                alert("Failed to delete item");
+            } else {
+                alert("Item deleted successfully");
             }
         }
     };
+      
 
     const handleSaveChanges = async () => {
-        try {
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) {
-                alert('Not authenticated');
-                return;
-            }
-
-            // Get user's shop ID
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const shopId = userDoc.data()?.shopId;
-
-            if (!shopId) {
-                alert('No shop found');
-                return;
-            }
-
-            // Update shop document
-            await updateDoc(doc(FIREBASE_DB, "shops", shopId), {
-                shopName,
-                isOpen,
-                profileImage: profileImage || null,
-                updatedAt: new Date().toISOString()
-            });
-
-            alert('Shop updated successfully!');
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
+      
+        if (!user) {
+            alert("Not authenticated");
+            return;
+        }
+      
+        const { data, error } = await supabase
+            .from("users")
+            .select("shop_id")
+            .eq("id", user.id)
+            .single();
+      
+        if (error || !data?.shop_id) {
+            alert("No shop found");
+            return;
+        }
+      
+        const { error: updateError } = await supabase
+            .from("shops")
+            .update({
+                shop_name: shopName,
+                is_open: isOpen,
+                profile_image: profileImage || null,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", data.shop_id);
+      
+        if (updateError) {
+            console.error("Error updating shop:", updateError);
+            alert("Failed to update shop");
+        } else {
+            alert("Shop updated successfully!");
             router.push("/(tabs)/dashboard/DashboardScreen");
-        } catch (error) {
-            console.error('Error updating shop:', error);
-            alert('Failed to update shop');
         }
     };
+      
 
     useEffect(() => {
+        let intervalId: any;
+      
         const fetchItems = async () => {
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) return;
-
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const shopId = userDoc.data()?.shopId;
-            if (!shopId) return;
-
-            const itemsQuery = query(collection(FIREBASE_DB, `shops/${shopId}/items`));
-
-            const unsubscribe = onSnapshot(itemsQuery, (snapshot) => {
-                const itemsList = [];
-                snapshot.forEach((doc) => {
-                    itemsList.push({ id: doc.id, ...doc.data() });
-                });
-                setItems(itemsList);
-            });
-
-            return () => unsubscribe();
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+      
+            if (!user) return;
+      
+            const { data: userData } = await supabase
+                .from("users")
+                .select("shop_id")
+                .eq("id", user.id)
+                .single();
+      
+            if (!userData?.shop_id) return;
+      
+            const fetch = async () => {
+                const { data: itemsData, error } = await supabase
+                    .from("items")
+                    .select("*")
+                    .eq("shop_id", userData.shop_id);
+      
+                if (error) {
+                    console.error("Error fetching items:", error);
+                } else {
+                    setItems(itemsData);
+                }
+            };
+      
+            await fetch();
+      
+            // Poll every 10 seconds (optional)
+            intervalId = setInterval(fetch, 10000);
         };
-
+      
         fetchItems();
-    }, []);
+      
+        return () => clearInterval(intervalId);
+      }, []);
+      
 
     return (
         <View style={styles.background}>
@@ -211,18 +257,19 @@ export default function EditShopScreen() {
                         <TouchableOpacity
                             style={styles.productCard}
                             onPress={async () => {
-                                const userId = FIREBASE_AUTH.currentUser?.uid;
-                                if (!userId) return;
-
-                                // Fetch user document
-                                const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-                                const shopId = userDoc.data()?.shopId;
-
-                                if (!shopId) {
-                                    alert('Shop not found');
-                                    return;
-                                }
-
+                                const {
+                                    data: { user },
+                                } = await supabase.auth.getUser();
+                                if (!user) return;
+                                
+                                const { data, error } = await supabase
+                                .from("users")
+                                .select("shop_id")
+                                .eq("id", user.id)
+                                .single();
+                                
+                                const shopId = data?.shop_id;
+                                  
                                 router.push({
                                     pathname: "/(tabs)/shop_owner/EditItemScreen",
                                     params: { shopId: shopId, itemId: item.id }

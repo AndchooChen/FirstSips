@@ -3,8 +3,7 @@ import { useState } from 'react';
 import { TextInput, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { FIREBASE_DB, FIREBASE_AUTH } from '../../auth/FirebaseConfig';
-import { doc, collection, setDoc, getDoc } from 'firebase/firestore';
+import { supabase } from '@/app/utils/supabase';
 import { useRouter } from 'expo-router';
 import ScreenWideButton from '../../components/ScreenWideButton';
 
@@ -72,67 +71,69 @@ const AddItemScreen = () => {
 
     const handleAddItem = async () => {
         try {
-            // Validate inputs
-            if (!name || !category || !description || !price) {
-                alert('Please fill in all required fields');
-                return;
-            }
-
-            if (!isUnlimited && !isHidden && !quantity) {
-                alert('Please specify a quantity or select Unlimited/Hidden');
-                return;
-            }
-
-            // Get current user's shop ID
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) {
-                alert('Not authenticated');
-                return;
-            }
-
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const shopId = userDoc.data()?.shopId;
-
-            if (!shopId) {
-                alert('No shop found for this user');
-                return;
-            }
-
-            // Create item in shop's items subcollection
-            const itemRef = doc(collection(FIREBASE_DB, `shops/${shopId}/items`));
-
-            let finalQuantity: number;
-
-            if (isUnlimited) {
-                finalQuantity = -1; // Use -1 to represent unlimited
-            } else if (isHidden) {
-                finalQuantity = -2; // Use -2 to represent hidden
-            } else {
-                finalQuantity = quantity === '' ? 0 : parseInt(quantity);
-            }
-
-            await setDoc(itemRef, {
-                itemId: itemRef.id,
-                shopId,
-                name,
-                category,
-                description,
-                price: parseFloat(price),
-                quantity: finalQuantity,
-                images,
-                createdAt: new Date().toISOString()
-            });
-
-            alert('Product added successfully!');
-            router.push({
-                pathname: "/(tabs)/shop_owner/EditShopScreen",
-                params: { shopId }
-            });
+          if (!name || !category || !description || !price) {
+            alert("Please fill in all required fields");
+            return;
+          }
+      
+          if (!isUnlimited && !isHidden && !quantity) {
+            alert("Please specify a quantity or select Unlimited/Hidden");
+            return;
+          }
+      
+          const user = supabase.auth.getUser();
+          const userId = (await user).data.user?.id;
+      
+          if (!userId) {
+            alert("Not authenticated");
+            return;
+          }
+      
+          // Fetch shopId for current user
+          const { data: userData, error: userError } = await supabase
+            .from("users")
+            .select("shop_id")
+            .eq("id", userId)
+            .single();
+      
+          if (userError || !userData?.shop_id) {
+            alert("No shop found for this user");
+            return;
+          }
+      
+          const shopId = userData.shop_id;
+      
+          let finalQuantity: number;
+          if (isUnlimited) finalQuantity = -1;
+          else if (isHidden) finalQuantity = -2;
+          else finalQuantity = quantity === "" ? 0 : parseInt(quantity);
+      
+          const { error: insertError } = await supabase.from("items").insert([
+            {
+              shop_id: shopId,
+              name,
+              category,
+              description,
+              price: parseFloat(price),
+              quantity: finalQuantity,
+              images,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+      
+          if (insertError) throw insertError;
+      
+          alert("Product added successfully!");
+          router.push({
+            pathname: "/(tabs)/shop_owner/EditShopScreen",
+            params: { shopId },
+          });
         } catch (error) {
-            console.error('Error adding product:', error);
-            alert('Failed to add product');
+          console.error("Error adding product:", error);
+          alert("Failed to add product");
         }
-    };
+      };
+      
 
     return (
         <ScrollView style={styles.background}>

@@ -3,8 +3,7 @@ import { useState, useEffect } from 'react';
 import { TextInput, Text, Button } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { FIREBASE_DB } from '../../auth/FirebaseConfig';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { supabase } from '@/app/utils/supabase';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import ScreenWideButton from '../../components/ScreenWideButton';
 
@@ -39,30 +38,6 @@ export default function EditItemScreen() {
 
         checkStripeAccountStatus();
     }, []);
-
-    useEffect(() => {
-        const fetchItem = async () => {
-            const itemDoc = await getDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`));
-            if (itemDoc.exists()) {
-                const data = itemDoc.data();
-                setName(data.name);
-                setCategory(data.category);
-                setDescription(data.description);
-                setPrice(data.price.toString());
-                if (data.quantity === -1) {
-                    setIsUnlimited(true);
-                    setQuantity('');
-                } else if (data.quantity === -2) {
-                    setIsHidden(true);
-                    setQuantity('');
-                } else {
-                    setQuantity(data.quantity.toString());
-                }
-                setImages(data.images || []);
-            }
-        };
-        fetchItem();
-    }, [shopId, itemId]);
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -121,32 +96,70 @@ export default function EditItemScreen() {
     const handleUpdateItem = async () => {
         try {
             let finalQuantity: number;
-
-            if (isUnlimited) {
-                finalQuantity = -1; // Use -1 to represent unlimited
-            } else if (isHidden) {
-                finalQuantity = -2; // Use -2 to represent hidden
-            } else {
-                finalQuantity = quantity === '' ? 0 : parseInt(quantity);
-            }
-
-            await updateDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`), {
+        
+            if (isUnlimited) finalQuantity = -1;
+            else if (isHidden) finalQuantity = -2;
+            else finalQuantity = quantity === "" ? 0 : parseInt(quantity);
+        
+            const { error } = await supabase
+                .from("items")
+                .update({
                 name,
                 category,
                 description,
                 price: parseFloat(price),
                 quantity: finalQuantity,
                 images,
-                updatedAt: new Date().toISOString()
-            });
-
-            alert('Item updated successfully!');
+                updated_at: new Date().toISOString(),
+                })
+                .eq("id", itemId)
+                .eq("shop_id", shopId);
+        
+            if (error) throw error;
+        
+            alert("Item updated successfully!");
             router.back();
         } catch (error) {
-            console.error('Error updating item:', error);
-            alert('Failed to update item');
+            console.error("Error updating item:", error);
+            alert("Failed to update item");
         }
-    };
+    };      
+
+    useEffect(() => {
+        const fetchItem = async () => {
+          const { data, error } = await supabase
+            .from("items")
+            .select("*")
+            .eq("id", itemId)
+            .eq("shop_id", shopId)
+            .single();
+      
+          if (error) {
+            console.error("Error fetching item:", error);
+            return;
+          }
+      
+          setName(data.name);
+          setCategory(data.category);
+          setDescription(data.description);
+          setPrice(data.price.toString());
+      
+          if (data.quantity === -1) {
+            setIsUnlimited(true);
+            setQuantity("");
+          } else if (data.quantity === -2) {
+            setIsHidden(true);
+            setQuantity("");
+          } else {
+            setQuantity(data.quantity.toString());
+          }
+      
+          setImages(data.images || []);
+        };
+      
+        fetchItem();
+      }, [shopId, itemId]);
+      
 
     return (
         <ScrollView style={styles.background}>

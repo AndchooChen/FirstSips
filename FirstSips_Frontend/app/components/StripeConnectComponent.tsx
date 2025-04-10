@@ -2,8 +2,7 @@ import { View, Alert, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { useStripe } from '@stripe/stripe-react-native';
 import { Button } from 'react-native-paper';
-import { doc, updateDoc } from 'firebase/firestore';
-import { FIREBASE_DB, FIREBASE_AUTH } from '../auth/FirebaseConfig';
+import { supabase } from "../utils/supabase";
 import React from 'react';
 
 interface StripeConnectComponentProps {
@@ -19,55 +18,51 @@ const StripeConnectComponent = ({ onSuccess, setIsProcessing }: StripeConnectCom
     try {
       setIsProcessing(true);
       setLoading(true);
-      
-      const userId = FIREBASE_AUTH.currentUser?.uid;
-      if (!userId) {
-        throw new Error('User not found');
+  
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+  
+      if (!user) {
+        throw new Error("User not found");
       }
-
-      // Create Payment Intent for setup
+  
       const response = await fetch('http://192.168.50.84:5000/stripe/create-payment-intent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId,
-          setup: true
+          userId: user.id,
+          setup: true,
         }),
       });
-
+  
       const { clientSecret } = await response.json();
-
-      // Initialize Payment Sheet
+  
       const { error: initError } = await initPaymentSheet({
-        merchantDisplayName: 'FirstSips',
+        merchantDisplayName: "FirstSips",
         paymentIntentClientSecret: clientSecret,
         allowsDelayedPaymentMethods: true,
       });
-
-      if (initError) {
-        throw new Error(initError.message);
-      }
-
-      // Present Payment Sheet
+  
+      if (initError) throw new Error(initError.message);
+  
       const { error: presentError } = await presentPaymentSheet();
-
-      if (presentError) {
-        throw new Error(presentError.message);
-      }
-
-      // Update user's Stripe status
-      await updateDoc(doc(FIREBASE_DB, 'users', userId), {
-        stripeConnected: true
-      });
-
-      Alert.alert('Success', 'Stripe account connected successfully!');
+      if (presentError) throw new Error(presentError.message);
+  
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({ stripe_connected: true })
+        .eq("id", user.id);
+  
+      if (updateError) throw updateError;
+  
+      Alert.alert("Success", "Stripe account connected successfully!");
       onSuccess();
-
     } catch (error: any) {
-      Alert.alert('Error', error.message);
-      console.error('Stripe Connect Error:', error);
+      Alert.alert("Error", error.message);
+      console.error("Stripe Connect Error:", error);
     } finally {
       setLoading(false);
       setIsProcessing(false);

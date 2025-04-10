@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { FIREBASE_DB } from '../../auth/FirebaseConfig';
-import { doc, getDoc, collection, query, getDocs } from 'firebase/firestore';
+import { supabase } from '../../utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 
 interface ShopItem {
@@ -28,28 +27,39 @@ export default function ClosedShopScreen() {
 
     useEffect(() => {
         const fetchShopAndItems = async () => {
-            if (!shopId) return;
-
-            try {
-                const shopDoc = await getDoc(doc(FIREBASE_DB, 'shops', shopId as string));
-                if (shopDoc.exists()) {
-                    setShop(shopDoc.data() as Shop);
-                }
-
-                const itemsQuery = query(collection(FIREBASE_DB, `shops/${shopId}/items`));
-                const itemsSnapshot = await getDocs(itemsQuery);
-                const itemsList: ShopItem[] = [];
-                itemsSnapshot.forEach((doc) => {
-                    itemsList.push({ id: doc.id, ...doc.data() } as ShopItem);
-                });
-                setItems(itemsList);
-            } catch (error) {
-                console.error('Error fetching shop data:', error);
-            }
+          if (!shopId) return;
+      
+          try {
+            const { data: shopData, error: shopError } = await supabase
+              .from("shops")
+              .select("*")
+              .eq("id", shopId)
+              .single();
+      
+            if (shopError) throw shopError;
+            setShop(shopData);
+      
+            const { data: itemsData, error: itemsError } = await supabase
+              .from("items")
+              .select("*")
+              .eq("shop_id", shopId);
+      
+            if (itemsError) throw itemsError;
+      
+            const itemsList: ShopItem[] = itemsData.map((item) => ({
+              ...item,
+              id: item.id,
+            }));
+      
+            setItems(itemsList);
+          } catch (error) {
+            console.error("Error fetching shop or items:", error);
+          }
         };
-
+      
         fetchShopAndItems();
-    }, [shopId]);
+      }, [shopId]);
+      
 
     const handleOwnerInfo = () => {
         if (shop?.ownerId) {

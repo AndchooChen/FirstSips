@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { FIREBASE_DB } from '../../auth/FirebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '@/app/utils/supabase';
 
 interface OwnerInfo {
     firstName: string;
@@ -18,20 +17,30 @@ export default function OwnerInfoScreen() {
     const router = useRouter();
 
     useEffect(() => {
-        const fetchOwnerInfo = async () => {
+        const getOwnerInfo = async () => {
             if (!ownerId) return;
 
             try {
-                const ownerDoc = await getDoc(doc(FIREBASE_DB, 'users', ownerId as string));
-                if (ownerDoc.exists()) {
-                    setOwnerInfo(ownerDoc.data() as OwnerInfo);
+                const { data: ownerData, error: ownerError } = await supabase
+                    .from("users")
+                    .select("first_name, last_name, phone_number, email")
+                    .eq("id", ownerId)
+                    .single();
+
+                if (ownerError) {
+                    console.error('Error fetching owner info:', ownerError);
+                    return;
                 }
+                if (ownerData) {
+                    setOwnerInfo(ownerData.data() as OwnerInfo);
+                }
+
             } catch (error) {
                 console.error('Error fetching owner info:', error);
             }
         };
 
-        fetchOwnerInfo();
+        getOwnerInfo();
     }, [ownerId]);
 
     return (

@@ -3,11 +3,10 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Ale
 import { Divider, ActivityIndicator, Button } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
-import { doc, getDoc, setDoc, collection, addDoc, updateDoc } from 'firebase/firestore';
 import { useStripe } from '@stripe/stripe-react-native';
 import { API_URL } from '../config/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { supabase } from '../utils/supabase';
 
 interface ShopData {
     shopName: string;
@@ -52,38 +51,38 @@ const CheckoutScreen = () => {
     // Function to check item availability
     const checkItemAvailability = async (itemId: string, requestedQuantity: number) => {
         try {
-            // Get the current item data from Firestore
-            const itemDoc = await getDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`));
-            if (!itemDoc.exists()) {
-                return { available: false, message: 'Item no longer exists' };
-            }
-
-            const itemData = itemDoc.data();
-
-            // Check if item is hidden
-            if (itemData.quantity === -2) {
-                return { available: false, message: 'This item is not available for purchase.' };
-            }
-
-            // If unlimited stock
-            if (itemData.quantity === -1) {
-                return { available: true };
-            }
-
-            // Check if enough stock
-            if (requestedQuantity > itemData.quantity) {
-                return {
-                    available: false,
-                    message: `Sorry, only ${itemData.quantity} items available in stock.`
-                };
-            }
-
+          const { data: itemData, error } = await supabase
+            .from("items")
+            .select("*")
+            .eq("id", itemId)
+            .single();
+      
+          if (error || !itemData) {
+            return { available: false, message: "Item no longer exists" };
+          }
+      
+          if (itemData.quantity === -2) {
+            return { available: false, message: "This item is not available for purchase." };
+          }
+      
+          if (itemData.quantity === -1) {
             return { available: true };
+          }
+      
+          if (requestedQuantity > itemData.quantity) {
+            return {
+              available: false,
+              message: `Sorry, only ${itemData.quantity} items available in stock.`,
+            };
+          }
+      
+          return { available: true };
         } catch (error) {
-            console.error('Error checking item availability:', error);
-            return { available: false, message: 'Error checking availability' };
+          console.error("Error checking item availability:", error);
+          return { available: false, message: "Error checking availability" };
         }
-    };
+      };
+      
 
     // Function to update cart items
     const updateCartItem = async (itemId: string, changeType: 'increase' | 'decrease') => {
@@ -152,7 +151,13 @@ const CheckoutScreen = () => {
     }, [cartItems]);
 
     const fetchPaymentSheetParams = async () => {
-        const userId = FIREBASE_AUTH.currentUser?.uid;
+        const {
+            data: {user},
+            error: authError,
+        } = await supabase.auth.getUser();
+
+        const userId = user?.id;
+
         if (!userId) {
             throw new Error('User not authenticated');
         }
@@ -226,86 +231,75 @@ const CheckoutScreen = () => {
 
     const handlePayment = async () => {
         if (!loading) return;
-
+      
         try {
-            setIsProcessing(true);
-
-            // Check availability for all items before proceeding
-            for (const item of cartItems) {
-                const result = await checkItemAvailability(item.id, item.quantity);
-                if (!result.available) {
-                    Alert.alert('Inventory Issue', result.message);
-                    setIsProcessing(false);
-                    return;
-                }
+          setIsProcessing(true);
+      
+          for (const item of cartItems) {
+            const result = await checkItemAvailability(item.id, item.quantity);
+            if (!result.available) {
+              Alert.alert("Inventory Issue", result.message);
+              setIsProcessing(false);
+              return;
             }
-
-            const { error } = await presentPaymentSheet();
-
-            if (error) {
-                Alert.alert('Error', error.message);
-                return;
-            }
-
-            // Create order in Firestore
-            const orderRef = collection(FIREBASE_DB, 'orders');
-            const newOrder = {
-                shopId,
-                customerId: customerInfo.userId,
-                customerName: customerInfo.name,
-                customerPhone: customerInfo.phoneNumber,
+          }
+      
+          const { error: paymentError } = await presentPaymentSheet();
+      
+          if (paymentError) {
+            Alert.alert("Error", paymentError.message);
+            return;
+          }
+      
+          const { data: orderData, error: orderError } = await supabase
+            .from("orders")
+            .insert([
+              {
+                user_id: customerInfo.userId,
+                shop_id: shopId,
                 items: cartItems,
-                totalAmount: totals.total.toFixed(2),
-                status: 'pending',
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                pickupTime: pickupTime,
-            };
-
-            const docRef = await addDoc(orderRef, newOrder);
-
-            // Store order references for user
-            await setDoc(doc(FIREBASE_DB, 'users', customerInfo.userId, 'orders', docRef.id), {
-                customerId: customerInfo.userId,
-                shopId: shopId as string,
-                createdAt: new Date(),
-            });
-
-            // Store order references for shop
-            await setDoc(doc(FIREBASE_DB, 'shops', shopId as string, 'orders', docRef.id), {
-                customerId: customerInfo.userId,
-                shopId: shopId as string,
-                createdAt: new Date(),
-            });
-
-            // Update item quantities in Firestore
-            for (const item of cartItems) {
-                const itemRef = doc(FIREBASE_DB, `shops/${shopId}/items/${item.id}`);
-                const itemDoc = await getDoc(itemRef);
-
-                if (itemDoc.exists()) {
-                    const itemData = itemDoc.data();
-
-                    // Only update if the item has a limited quantity (not unlimited or hidden)
-                    if (itemData.quantity !== -1 && itemData.quantity !== -2) {
-                        const newQuantity = itemData.quantity - item.quantity;
-                        await updateDoc(itemRef, { quantity: newQuantity });
-                    }
-                }
+                total: parseFloat(totals.total.toFixed(2)),
+                status: "pending",
+                pickup_time: pickupTime,
+              },
+            ])
+            .select()
+            .single();
+      
+          if (orderError) {
+            throw orderError;
+          }
+      
+          // Update item quantities
+          for (const item of cartItems) {
+            const { data: itemData, error: fetchError } = await supabase
+              .from("items")
+              .select("quantity")
+              .eq("id", item.id)
+              .single();
+      
+            if (itemData && itemData.quantity !== -1 && itemData.quantity !== -2) {
+              const newQuantity = itemData.quantity - item.quantity;
+              await supabase
+                .from("items")
+                .update({ quantity: newQuantity })
+                .eq("id", item.id);
             }
-
-            Alert.alert('Success', 'Your order has been placed!');
-            router.push({
-                pathname: "/(checkout)/SuccessScreen",
-                params: { orderId: docRef.id }
-            });
+          }
+      
+          Alert.alert("Success", "Your order has been placed!");
+          router.push({
+            pathname: "/(checkout)/SuccessScreen",
+            params: { orderId: orderData.id },
+          });
         } catch (error) {
-            console.error('Payment Error:', error);
-            Alert.alert('Error', 'Unable to process payment');
+          console.error("Payment Error:", error);
+          Alert.alert("Error", "Unable to process payment");
         } finally {
-            setIsProcessing(false);
+          setIsProcessing(false);
         }
-    };
+      };
+      
 
     useEffect(() => {
         initializePaymentSheet();
@@ -313,82 +307,71 @@ const CheckoutScreen = () => {
 
     // Fetch user data
     useEffect(() => {
-        const fetchUserData = async () => {
-            console.log("Fetching user data");
-            const userId = FIREBASE_AUTH.currentUser?.uid; // Get the current user ID from Firebase Auth
-            if (!userId) {
-                alert('User not authenticated');
-                setLoading(false);
-                return;
-            }
-
-            // Reference to the user document in Firestore
-            const userDocRef = doc(FIREBASE_DB, 'users', userId);
-
-            try {
-                // Fetch the user document
-                const userDocSnap = await getDoc(userDocRef);
-
-                if (userDocSnap.exists()) {
-                    const userData = userDocSnap.data();
-
-                    // Concatenate firstName and lastName to get full name
-                    const name = `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
-                    const phoneNumber = userData.phoneNumber || '';
-
-                    // Update state with the fetched data
-                    setCustomerInfo({
-                        name,
-                        phoneNumber,
-                        userId,
-                    });
-                } else {
-                    alert('User data not found');
-                }
-            } catch (error) {
-                console.error('Error fetching user data:', error);
-                alert('Failed to fetch user data');
-            } finally {
-                setLoading(false);
-            }
+        const getUserData = async () => {
+          const user = supabase.auth.user();
+          if (!user) {
+            alert("User not authenticated");
+            setLoading(false);
+            return;
+          }
+      
+          const { data: userData, error } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", user.id)
+            .single();
+      
+          if (error || !userData) {
+            alert("User data not found");
+          } else {
+            const name = `${userData.first_name || ""} ${userData.last_name || ""}`.trim();
+            const phoneNumber = userData.phone_number || "";
+      
+            setCustomerInfo({
+              name,
+              phoneNumber,
+              userId: user.id,
+            });
+          }
+      
+          setLoading(false);
         };
-
-        fetchUserData();
-    }, []);
+      
+        getUserData();
+      }, []);
+      
 
     // Fetch shop data
     useEffect(() => {
         const fetchShopData = async () => {
-            if (!shopId) return;
-
-            try {
-                const shopDoc = await getDoc(doc(FIREBASE_DB, 'shops', shopId as string));
-
-                if (shopDoc.exists()) {
-                    const shopDataFromDB = shopDoc.data() as ShopData;
-
-                    // Fetch owner's data to get phone number
-                    const ownerDoc = await getDoc(doc(FIREBASE_DB, 'users', shopDataFromDB.ownerId));
-                    if (ownerDoc.exists()) {
-                        const ownerData = ownerDoc.data();
-                        setShopData({
-                            ...shopDataFromDB,
-                            phoneNumber: ownerData.phoneNumber || 'No phone number available'
-                        });
-                    } else {
-                        setShopData(shopDataFromDB);
-                    }
-                } else {
-                    alert('Shop data not found');
-                }
-            } catch (error) {
-                console.error('Error fetching shop data:', error);
-                alert('Failed to fetch shop data');
-            }
+          if (!shopId) return;
+      
+          const { data: shopData, error: shopError } = await supabase
+            .from("shops")
+            .select("*")
+            .eq("id", shopId)
+            .single();
+      
+          if (shopError || !shopData) {
+            alert("Shop data not found");
+            return;
+          }
+      
+          const { data: ownerData, error: ownerError } = await supabase
+            .from("users")
+            .select("phone_number")
+            .eq("id", shopData.owner_id)
+            .single();
+      
+          setShopData({
+            ...shopData,
+            phoneNumber: ownerData?.phone_number || "No phone number available",
+          });
         };
-
+      
         fetchShopData();
-    }, [shopId]);
+      }, [shopId]);
+      
 
     return (
         <SafeAreaView style={styles.safeArea}>

@@ -1,3 +1,4 @@
+/*
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, SafeAreaView, Image, FlatList, TouchableOpacity, TextInput, } from "react-native";
 import ItemCard from "../../components/ItemCard";
@@ -226,3 +227,4 @@ const styles = StyleSheet.create({
 });
 
 export default ShopScreen;
+*/
