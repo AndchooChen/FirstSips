@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
-import { FIREBASE_AUTH, FIREBASE_DB } from '../../auth/FirebaseConfig';
-import { collection, query, getDocs, doc, getDoc } from 'firebase/firestore';
 import ShopCard from '../../components/ShopCard';
 import { useRouter } from 'expo-router';
 import { Menu, IconButton } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import { signOut } from "../../auth/auth";
+import { supabase } from "../../utils/supabase";
 
 interface Shop {
     id: string;
@@ -27,12 +27,29 @@ const DashboardScreen = () => {
     // Check if user has a shop
     const checkUserShop = async () => {
         try {
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) return;
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-            const userDoc = await getDoc(doc(FIREBASE_DB, 'users', userId));
-            if (userDoc.exists() && userDoc.data().shopId) {
-                setUserShopId(userDoc.data().shopId);
+            if (!user || authError) {
+                console.error('Auth error:', authError);
+                return;
+            }
+
+            const userId = user.id;
+
+            // Query the users table to check if the user has a shop
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('shop_id')
+                .eq('id', userId)
+                .single();
+
+            if (userError) {
+                console.error('Error fetching user data:', userError);
+                return;
+            }
+
+            if (userData && userData.shop_id) {
+                setUserShopId(userData.shop_id);
                 setHasShop(true);
             } else {
                 setUserShopId(null);
@@ -47,16 +64,30 @@ const DashboardScreen = () => {
         try {
             await checkUserShop();
 
-            const shopsQuery = query(collection(FIREBASE_DB, 'shops'));
-            const querySnapshot = await getDocs(shopsQuery);
+            // Fetch all shops from Supabase
+            const { data: shopsData, error: shopsError } = await supabase
+                .from('shops')
+                .select('*');
+
+            if (shopsError) {
+                console.error('Error fetching shops:', shopsError);
+                return;
+            }
 
             const openShopsList: Shop[] = [];
             const closedShopsList: Shop[] = [];
 
-            querySnapshot.forEach((doc) => {
-                const shopData = { id: doc.id, ...doc.data() } as Shop;
+            // Process the shops data
+            shopsData.forEach((shop) => {
+                // Convert the Supabase shop data to match your Shop interface
+                const shopData: Shop = {
+                    id: shop.id,
+                    shopName: shop.shop_name,
+                    profileImage: shop.profile_image,
+                    isOpen: shop.is_open,
+                    description: shop.description,
+                };
 
-                // Skip user's own shop
                 if (shopData.id === userShopId) return;
 
                 if (shopData.isOpen) {
@@ -95,12 +126,16 @@ const DashboardScreen = () => {
         router.push('/(tabs)/shop_front/OrderHistoryScreen');
     };
 
-    const handleLogout = async () => {
+    const handleSignOut = async () => {
         try {
-            await FIREBASE_AUTH.signOut();
+            const { error } = await signOut();
+            if (error) {
+                console.log('Sign out error:', error);
+                return;
+            }
             router.replace('../../(public)/LandingScreen');
         } catch (error) {
-            console.log(error);
+            console.log('Unexpected error during sign out:', error);
         }
     };
 
@@ -146,9 +181,9 @@ const DashboardScreen = () => {
                     <Menu.Item
                         onPress={() => {
                             setMenuVisible(false);
-                            handleLogout();
+                            handleSignOut();
                         }}
-                        title="Logout"
+                        title="Sign Out"
                         leadingIcon="logout"
                     />
                 </Menu>

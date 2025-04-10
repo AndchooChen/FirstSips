@@ -3,69 +3,76 @@ import { useState } from 'react';
 import { TextInput } from "react-native-paper";
 import { SelectList } from 'react-native-dropdown-select-list';
 import { Ionicons } from "@expo/vector-icons";
-import { doc, setDoc, collection, updateDoc } from "firebase/firestore";
-import { FIREBASE_AUTH, FIREBASE_DB } from "../../auth/FirebaseConfig";
-import ScreenWideButton from "../../components/ScreenWideButton";
+import ScreenWideButton from "../components/ScreenWideButton";
 import { useRouter } from "expo-router";
+import { supabase } from "../utils/supabase";
 
 export default function CreateShopScreen() {
     const [shopName, setShopName] = useState("");
-    const [description, setDescription] = useState("");
     const [streetAddress, setStreetAddress] = useState("");
     const [optional, setOptional] = useState("");
     const [zipCode, setZipCode] = useState("");
     const [city, setCity] = useState("");
     const [state, setState] = useState("");
 
-    const [deliveryMethod, setDeliveryMethod] = useState("");
-
-    const deliveryOptions = [
-        { label: "Pickup", value: "pickup" },
-        { label: "Delivery", value: "delivery" },
-        { label: "Pickup and Delivery", value: "both" }
-    ];
-
     const router = useRouter();
 
     const handleCreateShop = async () => {
         try {
-            
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) {
+            const {
+                data: {user},
+                error: authError,
+            } = await supabase.auth.getUser();
+
+            if (!user || authError) {
                 alert("No authenticated user found");
                 return;
             }
 
-            // Create a new shop document with auto-generated ID
-            const shopRef = doc(collection(FIREBASE_DB, "shops"));
-            const shopId = shopRef.id;
+            const userId = user.id;
 
-            await setDoc(shopRef, {
-                shopId,
-                ownerId: userId,
-                shopName,
-                description,
-                streetAddress,
-                optional,
-                city,
-                state,
-                zipCode,
-                deliveryMethod,
-                createdAt: new Date().toISOString()
-            });
+            // Insert new shop
+            const { data: shopData, error: insertError } = await supabase
+                .from("shops")
+                .insert([
+                    {
+                        owner_id: userId,
+                        shop_name: shopName,
+                        description: "",
+                        street_address: streetAddress,
+                        optional,
+                        city,
+                        state,
+                        zip: zipCode,
+                        created_at: new Date().toISOString()
+                    }
+                ])
+                .select();
 
-            // Update user's document with the shop ID
-            await updateDoc(doc(FIREBASE_DB, "users", userId), {
-                shopId
-            });
+            if (insertError) {
+                throw insertError;
+            }
 
-            alert("Shop created successfully");
-            router.push("/(tabs)/shop_owner/EditShopScreen");
+            const CreatedShop = shopData[0]
+
+            // Update user record with the shop's ID
+            const { error: userUpdateError } = await supabase
+                .from("user")
+                .update({ shop_id: CreatedShop.id })
+                .eq("id", userId)
+
+                if (userUpdateError) {
+                    throw userUpdateError
+                  }
+              
+                alert("Shop created successfully")
+                router.push("/(tabs)/shop_owner/EditShopScreen")
         } catch (error: any) {
-            console.error("error creating shop:", error);
-            alert("Failed to create shop: " + error.message);
+            console.error("Error creating shop:", error)
+            alert("Failed to create shop: " + error.message)
         }
-    };
+    
+    }
 
     return (
         <ScrollView style={styles.background}>
@@ -90,15 +97,6 @@ export default function CreateShopScreen() {
                     value={shopName}
                     onChangeText={shopName => setShopName(shopName)}
                     mode="outlined"
-                />
-                <TextInput
-                    style={[styles.input, styles.multilineInput]}
-                    label="Description"
-                    value={description}
-                    onChangeText={description => setDescription(description)}
-                    mode="outlined"
-                    multiline
-                    numberOfLines={3}
                 />
             </View>
             {/* Address Section */}
@@ -140,33 +138,6 @@ export default function CreateShopScreen() {
                     style={styles.input}
                 />
             </View>
-            
-            {/* Delivery Method Section */}
-            <Text style={styles.sectionTitle}>Delivery Options</Text>
-                <View style={styles.deliveryContainer}>
-                    <SelectList
-                        setSelected={setDeliveryMethod}
-                        data={deliveryOptions}
-                        save="key"
-                        placeholder="Select delivery method"
-                        boxStyles={{
-                            backgroundColor: '#FFFFFF',
-                            borderRadius: 4,
-                            borderWidth: 1,
-                            borderColor: '#6F4E37',
-                        }}
-                        inputStyles={{
-                            color: '#6F4E37',
-                        }}
-                        dropdownStyles={{
-                            backgroundColor: '#FFFFFF',
-                            borderColor: '#6F4E37',
-                        }}
-                        dropdownTextStyles={{
-                            color: '#6F4E37',
-                        }}
-                    />
-                </View>
             
             {/* Create Button */}
             <View style={styles.buttonContainer}>

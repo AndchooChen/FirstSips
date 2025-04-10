@@ -2,7 +2,6 @@ import { View, StyleSheet, TouchableOpacity, Text } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import ScreenWideButton from '../components/ScreenWideButton';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
 
 const AccountTypeScreen = () => {
     const router = useRouter();

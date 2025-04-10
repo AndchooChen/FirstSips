@@ -1,59 +1,44 @@
-import { View } from 'react-native';
-import LandingScreen from './(public)/LandingScreen';
-import * as Linking from 'expo-linking';
-import { useStripe } from '@stripe/stripe-react-native';
-import { useCallback, useEffect } from 'react';
+import { Slot, useRouter } from 'expo-router'
+import { useEffect, useState } from 'react'
+import { supabase } from './utils/supabase'
+import { Session } from '@supabase/supabase-js'
+import Landing from './(public)/LandingScreen'
 
-const linking = {
-  prefixes: [Linking.createURL('/')], // Expo's deep link handler
-  config: {
-    screens: {
-      StripeConnect: 'stripe-connect',
-      EditShop: 'EditShopScreen',
-    },
-  },
-};
-
-export default function Index() {
-  const { handleURLCallback } = useStripe();
-
-  const handleDeepLink = useCallback(
-    async (url: string | null) => {
-      if (url) {
-        const stripeHandled = await handleURLCallback(url);
-        if (stripeHandled) {
-          // This was a Stripe URL - you can add extra handling here
-          console.log('Handled Stripe URL return');
-        } else {
-          // This was NOT a Stripe URL – handle other deep links
-          console.log('Not a Stripe URL:', url);
-        }
-      }
-    },
-    [handleURLCallback]
-  );
+export default function RootLayout() {
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
-    const getUrlAsync = async () => {
-      const initialUrl = await Linking.getInitialURL();
-      handleDeepLink(initialUrl);
-    };
+    const getSession = async () => {
+      const { data } = await supabase.auth.getSession()
+      setSession(data.session)
+      setLoading(false)
+    }
 
-    getUrlAsync();
+    getSession()
 
-    const deepLinkListener = Linking.addEventListener(
-      'url',
-      (event: { url: string }) => {
-        handleDeepLink(event.url);
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => {
+      listener.subscription.unsubscribe()
+    }
+  }, [])
+
+  /*
+  useEffect(() => {
+    if (!loading) {
+      if (!session) {
+        router.replace('/login') // redirect to login
+      } else {
+        router.replace('/home') // redirect to app
       }
-    );
+    }
+  }, [session, loading])
+  */
+  return <Landing />
 
-    return () => deepLinkListener.remove();
-  }, [handleDeepLink]);
-
-  return (
-    <View style={{ flex: 1 }}>
-      <LandingScreen />
-    </View>
-  );
+  if (loading) return null
 }

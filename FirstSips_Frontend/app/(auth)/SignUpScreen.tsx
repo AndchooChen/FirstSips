@@ -1,66 +1,61 @@
 import { View, StyleSheet, KeyboardAvoidingView, ScrollView, Platform, Text, TouchableOpacity } from "react-native";
 import { useState } from "react";
 import { TextInput } from 'react-native-paper';
-import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
 import { formatBirthday, formatPhoneNumber, validateForm } from "../utils/signUpUtils"
 import ScreenWideButton from "../components/ScreenWideButton";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from "../utils/supabase";
+import { signUpWithEmail } from "../auth/auth";
 
 const SignUpScreen = () => {
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
     const [phoneNumber, setPhoneNumber] = useState("");
-    // const [birthday, setBirthday] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const params = useLocalSearchParams();
     const isShopOwner = params.isShopOwner === 'true';
 
     const router = useRouter();
-    const auth = FIREBASE_AUTH;
 
-    const signUp = async () => {
+    const handleSignUp = async () => {
         if (!validateForm(firstName, lastName, email, password, phoneNumber)) {
             return;
         }
-
-        try {
-            if (isShopOwner) {
-                router.push({
-                    pathname: "../(tabs)/shop_owner/CreateShopScreen",
-                    params: { 
-                        firstName: firstName,
-                        lastName: lastName,
-                        email: email,
-                        password: password,
-                        phoneNumber: phoneNumber,
-                        isShopOwner: params.isShopOwner,
-                    }
-                });
-            } else {
-                const userCrediential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCrediential.user;
-                
-                await setDoc(doc(FIREBASE_DB, "users", user.uid), {
-                    firstName,
-                    lastName,
-                    email,
-                    phoneNumber,
-                    // birthday,
-                    isShopOwner: params.isShopOwner,
-                    createdAt: new Date().toISOString(),
+        const { data, error } = await signUpWithEmail(email, password);
+        
+        if (error) {
+            console.log('Sign up error:', error.message)
+            return
+        }
+        const user = data?.user;
+        
+        if (user) {
+            const { error: insertError } = await supabase
+            .from('users')
+            .insert([
+                {
+                    id: user.id,
+                    email: email,
+                    first_name: firstName,
+                    last_name: lastName,
+                    phone_number: phoneNumber,
+                    isShopOwner: isShopOwner,
                     shopId: null,
-                });
+                }
+            ])
 
-                router.push("../(tabs)/dashboard/DashboardScreen");
+            if (insertError) {
+                console.log("Error inserting user profile: ", insertError.message)
+            } else {
+                console.log("User profile created");
             }
         }
-        catch (error: any) {
-            alert('Sign up failed: ' + error.message);
-            console.log(error);
+        if (isShopOwner) {
+            router.push("./CreateShopScreen")
+        } else {
+            router.push("../(tabs)/dashboard/DashboardScreen");
         }
     }
 
@@ -102,17 +97,6 @@ const SignUpScreen = () => {
                         keyboardType="numeric"
                         maxLength={14}
                     />
-                    {/*
-                    <TextInput 
-                        label="Birthday"
-                        value={birthday}
-                        onChangeText={(text) => setBirthday(formatBirthday(text, setBirthday))}
-                        mode="outlined"
-                        placeholder="MM/DD/YYYY"
-                        keyboardType="numeric"
-                        maxLength={10}
-                    />
-                    */}
                     <TextInput 
                         label = "Email"
                         value = {email}
@@ -131,7 +115,7 @@ const SignUpScreen = () => {
                     {}
                     <ScreenWideButton
                         text={isShopOwner ? "Continue to shop" : "Sign up"}
-                        onPress={signUp}
+                        onPress={handleSignUp}
                         color="#D4A373"
                         textColor="#000000"
                     />
