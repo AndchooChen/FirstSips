@@ -1,7 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { useState } from 'react';
 import { TextInput } from "react-native-paper";
-import { SelectList } from 'react-native-dropdown-select-list';
 import { Ionicons } from "@expo/vector-icons";
 import ScreenWideButton from "../components/ScreenWideButton";
 import { useRouter } from "expo-router";

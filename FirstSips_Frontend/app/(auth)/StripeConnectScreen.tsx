@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Button, ActivityIndicator, Alert, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { FIREBASE_DB, FIREBASE_AUTH } from '../auth/FirebaseConfig';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { API_URL } from '../config/api';
 import ScreenWideButton from '../components/ScreenWideButton';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../utils/supabase';
 
 const StripeConnectScreen = () => {
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
+    const [shopId, setShopId] = useState('');
     const router = useRouter();
     const params = useLocalSearchParams();
 
@@ -62,22 +62,56 @@ const StripeConnectScreen = () => {
         };
     }, [router]);
 
+    const getUserId = async () => {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+            
+        if (!user || authError) {
+            console.error('Auth error:', authError);
+            return;
+        }
+
+        const userId = user.id;
+        return userId
+    }
+
+    const getUserShopId = async () => {
+        const userId = await getUserId();
+
+        const { data: userData, error: userError } = await supabase
+            .from("users")
+            .select("shop_id")
+            .eq("id", userId)
+            .single();
+
+        if (userError) {
+            console.error('Error fetching user data:', userError);
+            return;
+        }
+
+        setShopId(userData.shop_id);
+    }
+
+    const getUserEmail = async () => {
+        const userId = await getUserId();
+
+        const {data: userEmail, error: userEmailError} = await supabase
+            .from("users")
+            .select("email")
+            .eq("id", userId)
+            .single();
+
+        if (userEmailError) {
+            console.error('Error fetching user data:', userEmailError);
+            return;
+        }
+
+        setEmail(userEmail.email);
+    }
+
     const handleStripeOnboarding = async () => {
         try {
             setLoading(true);
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) {
-                throw new Error('User not authenticated');
-            }
 
-            // Get user's shop ID
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const shopId = userDoc.data()?.shopId;
-
-            if (!shopId) {
-                throw new Error('No shop found for this user');
-            }
-            
             // Step 1: Create Stripe Account
             const accountResponse = await fetch(`${API_URL}/stripe/create-account`, {
                 method: 'POST',
@@ -122,16 +156,8 @@ const StripeConnectScreen = () => {
     };
 
     useEffect(() => {
-        const fetchEmail = async () => {
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) return;
-
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const userEmail = userDoc.data()?.email;
-            setEmail(userEmail || '');
-        }
-
-        fetchEmail();
+        getUserEmail();
+        getUserShopId();
     }, []);
 
     return (
