@@ -25,7 +25,7 @@ const LoginScreen = () => {
 
         console.log("Logged in user: ", data);
         setLoading(false);
-        router.push("./(app)/dashboard/DashboardScreen");
+        router.push("../(tabs)/dashboard/DashboardScreen");
     };
 
     return (

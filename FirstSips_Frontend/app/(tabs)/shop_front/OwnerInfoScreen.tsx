@@ -5,26 +5,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/app/utils/supabase';
 
 interface OwnerInfo {
-    firstName: string;
-    lastName: string;
-    phoneNumber: string;
+    first_name: string;
+    last_name: string;
+    phone_number: string;
     email: string;
 }
 
 export default function OwnerInfoScreen() {
-    const { ownerId } = useLocalSearchParams();
+    const { owner_id } = useLocalSearchParams();
     const [ownerInfo, setOwnerInfo] = useState<OwnerInfo | null>(null);
     const router = useRouter();
 
     useEffect(() => {
         const getOwnerInfo = async () => {
-            if (!ownerId) return;
+            console.log(owner_id);
+            if (!owner_id) return;
 
             try {
                 const { data: ownerData, error: ownerError } = await supabase
                     .from("users")
                     .select("first_name, last_name, phone_number, email")
-                    .eq("id", ownerId)
+                    .eq("id", owner_id)
                     .single();
 
                 if (ownerError) {
@@ -32,7 +33,7 @@ export default function OwnerInfoScreen() {
                     return;
                 }
                 if (ownerData) {
-                    setOwnerInfo(ownerData.data() as OwnerInfo);
+                    setOwnerInfo(ownerData as OwnerInfo);
                 }
 
             } catch (error) {
@@ -41,7 +42,7 @@ export default function OwnerInfoScreen() {
         };
 
         getOwnerInfo();
-    }, [ownerId]);
+    }, [owner_id]);
 
     return (
         <View style={styles.container}>
@@ -63,7 +64,7 @@ export default function OwnerInfoScreen() {
                         <View style={styles.infoTextContainer}>
                             <Text style={styles.label}>Name</Text>
                             <Text style={styles.value}>
-                                {ownerInfo.firstName} {ownerInfo.lastName}
+                                {ownerInfo.first_name} {ownerInfo.last_name}
                             </Text>
                         </View>
                     </View>
@@ -72,7 +73,7 @@ export default function OwnerInfoScreen() {
                         <Ionicons name="call" size={24} color="#6F4E37" />
                         <View style={styles.infoTextContainer}>
                             <Text style={styles.label}>Phone Number</Text>
-                            <Text style={styles.value}>{ownerInfo.phoneNumber}</Text>
+                            <Text style={styles.value}>{ownerInfo.phone_number}</Text>
                         </View>
                     </View>
 

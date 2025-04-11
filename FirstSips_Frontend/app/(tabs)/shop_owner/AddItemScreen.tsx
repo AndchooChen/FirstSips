@@ -9,7 +9,6 @@ import ScreenWideButton from '../../components/ScreenWideButton';
 
 const AddItemScreen = () => {
     const [name, setName] = useState('');
-    const [category, setCategory] = useState('');
     const [description, setDescription] = useState('');
     const [price, setPrice] = useState('');
     const [quantity, setQuantity] = useState('');
@@ -71,7 +70,7 @@ const AddItemScreen = () => {
 
     const handleAddItem = async () => {
         try {
-          if (!name || !category || !description || !price) {
+          if (!name || !description || !price) {
             alert("Please fill in all required fields");
             return;
           }
@@ -112,7 +111,6 @@ const AddItemScreen = () => {
             {
               shop_id: shopId,
               name,
-              category,
               description,
               price: parseFloat(price),
               quantity: finalQuantity,
@@ -151,14 +149,6 @@ const AddItemScreen = () => {
                     label="Product Name"
                     value={name}
                     onChangeText={setName}
-                    mode="outlined"
-                    style={styles.input}
-                />
-
-                <TextInput
-                    label="Category"
-                    value={category}
-                    onChangeText={setCategory}
                     mode="outlined"
                     style={styles.input}
                 />

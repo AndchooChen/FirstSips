@@ -9,7 +9,6 @@ import { supabase } from "../utils/supabase";
 export default function CreateShopScreen() {
     const [shopName, setShopName] = useState("");
     const [streetAddress, setStreetAddress] = useState("");
-    const [optional, setOptional] = useState("");
     const [zipCode, setZipCode] = useState("");
     const [city, setCity] = useState("");
     const [state, setState] = useState("");
@@ -19,59 +18,75 @@ export default function CreateShopScreen() {
     const handleCreateShop = async () => {
         try {
             const {
-                data: {user},
+                data: { user },
                 error: authError,
             } = await supabase.auth.getUser();
-
+    
             if (!user || authError) {
                 alert("No authenticated user found");
                 return;
             }
-
-            const userId = user.id;
-
+    
+            const user_Id = user.id;
+    
+            // Check if the user is already a shop owner
+            const { data: userData, error: userError } = await supabase
+                .from("users")
+                .select("is_shop_owner")
+                .eq("id", user_Id)
+                .single();
+    
+            if (userError) {
+                throw userError;
+            }
+    
+            if (userData.is_shop_owner) {
+                alert("You already own a shop!");
+                return;
+            }
+    
             // Insert new shop
             const { data: shopData, error: insertError } = await supabase
                 .from("shops")
                 .insert([
                     {
-                        owner_id: userId,
+                        owner_id: user_Id,
                         shop_name: shopName,
                         description: "",
                         street_address: streetAddress,
-                        optional,
                         city,
                         state,
                         zip: zipCode,
-                        created_at: new Date().toISOString()
-                    }
+                        status: false,
+                        created_at: new Date().toISOString(),
+                    },
                 ])
                 .select();
-
+    
             if (insertError) {
                 throw insertError;
             }
-
-            const CreatedShop = shopData[0]
-
-            // Update user record with the shop's ID
-            const { error: userUpdateError } = await supabase
-                .from("user")
-                .update({ shop_id: CreatedShop.id })
-                .eq("id", userId)
-
-                if (userUpdateError) {
-                    throw userUpdateError
-                  }
-              
-                alert("Shop created successfully")
-                router.push("/(tabs)/shop_owner/EditShopScreen")
-        } catch (error: any) {
-            console.error("Error creating shop:", error)
-            alert("Failed to create shop: " + error.message)
-        }
     
-    }
+            const CreatedShop = shopData[0];
+    
+            // Update user record with the shop's ID and set is_shop_owner to true
+            const { error: userUpdateError } = await supabase
+                .from("users")
+                .update({ shop_id: CreatedShop.id, is_shop_owner: true })
+                .eq("id", user_Id);
+    
+            if (userUpdateError) {
+                throw userUpdateError;
+            }
+    
+            alert("Shop created successfully");
+            router.push("/(tabs)/shop_owner/EditShopScreen");
+        } catch (error: any) {
+            console.error("Error creating shop:", error.message);
+            alert("Failed to create shop: " + error.message);
+        }
+    };
+    
 
     return (
         <ScrollView style={styles.background}>
@@ -105,13 +120,6 @@ export default function CreateShopScreen() {
                     label="Street Address"
                     value={streetAddress}
                     onChangeText={streetAddress => setStreetAddress(streetAddress)}
-                    mode="outlined"
-                    style={styles.input}
-                />
-                <TextInput
-                    label="Apt/Suite/Other (optional)"
-                    value={optional}
-                    onChangeText={optional => setOptional(optional)}
                     mode="outlined"
                     style={styles.input}
                 />

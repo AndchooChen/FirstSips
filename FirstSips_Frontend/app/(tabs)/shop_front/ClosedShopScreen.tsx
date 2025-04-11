@@ -62,10 +62,10 @@ export default function ClosedShopScreen() {
       
 
     const handleOwnerInfo = () => {
-        if (shop?.ownerId) {
+        if (shop?.owner_id) {
             router.push({
                 pathname: "/(tabs)/shop_front/OwnerInfoScreen",
-                params: { ownerId: shop.ownerId }
+                params: { owner_id: shop.owner_id }
             });
         }
     };
@@ -87,7 +87,7 @@ export default function ClosedShopScreen() {
                 >
                     <Ionicons name="arrow-back" size={24} color="#6F4E37" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{shop.shopName}</Text>
+                <Text style={styles.headerTitle}>{shop.shop_name}</Text>
                 <TouchableOpacity
                     style={styles.headerButton}
                     onPress={handleOwnerInfo}
@@ -100,13 +100,13 @@ export default function ClosedShopScreen() {
                 <View style={styles.shopInfo}>
                     <Image
                         source={
-                            shop.profileImage
-                                ? { uri: shop.profileImage }
+                            shop.profile_image
+                                ? { uri: shop.profile_image }
                                 : require('../../assets/images/stock_coffee.png')
                         }
                         style={styles.shopImage}
                     />
-                    <Text style={styles.shopName}>{shop.shopName}</Text>
+                    <Text style={styles.shopName}>{shop.shop_name}</Text>
                     {shop.description && (
                         <Text style={styles.shopDescription}>{shop.description}</Text>
                     )}

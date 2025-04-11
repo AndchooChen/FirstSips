@@ -9,7 +9,7 @@ import { supabase } from '@/app/utils/supabase';
 
 export default function EditShopScreen() {
     const [shopName, setShopName] = useState("My Coffee Shop");
-    const [isOpen, setIsOpen] = useState(false);
+    const [status, setStatus] = useState(false);
     const [profileImage, setProfileImage] = useState<string | null>(null);
     const [showNameModal, setShowNameModal] = useState(false);
     const [tempShopName, setTempShopName] = useState(shopName);
@@ -121,7 +121,6 @@ export default function EditShopScreen() {
         }
     };
       
-
     const handleSaveChanges = async () => {
         const {
             data: { user },
@@ -147,7 +146,7 @@ export default function EditShopScreen() {
             .from("shops")
             .update({
                 shop_name: shopName,
-                is_open: isOpen,
+                status: status,
                 profile_image: profileImage || null,
                 updated_at: new Date().toISOString(),
             })
@@ -166,6 +165,34 @@ export default function EditShopScreen() {
     useEffect(() => {
         let intervalId: any;
       
+        const fetchShopData = async () => {
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+      
+            if (!user) return;
+            
+            const { data: userData } = await supabase
+                .from("users")
+                .select("shop_id")
+                .eq("id", user.id)
+                .single();
+      
+            if (!userData?.shop_id) return;
+
+            const { data: shopData, error } = await supabase
+                .from("shops")
+                .select("*")
+                .eq("id", userData.shop_id)
+                .single();
+
+            setShopName(shopData?.shop_name || "My Coffee Shop");
+            setStatus(shopData?.status || false);
+            setProfileImage(shopData?.profile_image || null);
+
+            console.log(shopData);
+        };
+
         const fetchItems = async () => {
             const {
                 data: { user },
@@ -199,7 +226,8 @@ export default function EditShopScreen() {
             // Poll every 10 seconds (optional)
             intervalId = setInterval(fetch, 10000);
         };
-      
+
+        fetchShopData();
         fetchItems();
       
         return () => clearInterval(intervalId);
@@ -241,11 +269,11 @@ export default function EditShopScreen() {
 
             {/* Shop Status Section */}
             <TouchableOpacity
-                style={[styles.statusButton, isOpen ? styles.openButton : styles.closedButton]}
-                onPress={() => setIsOpen(!isOpen)}
+                style={[styles.statusButton, status ? styles.openButton : styles.closedButton]}
+                onPress={() => setStatus(!status)}
             >
                 <Text style={styles.statusButtonText}>
-                    {isOpen ? 'OPEN' : 'CLOSED'}
+                    {status ? 'OPEN' : 'CLOSED'}
                 </Text>
             </TouchableOpacity>
 

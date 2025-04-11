@@ -416,18 +416,20 @@ const CheckoutScreen = () => {
                     ))}
                 </View>
 
-                {/* Location Information */}
+                {/*
+                
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Pickup Location</Text>
                     <View style={styles.shopInfo}>
-                        <Text style={styles.shopName}>{shopData?.shopName}</Text>
-                        <Text style={styles.shopAddress}>{shopData?.streetAddress}</Text>
+                        <Text style={styles.shopName}>{shopData?.shop_name}</Text>
+                        <Text style={styles.shopAddress}>{shopData?.street_address}</Text>
                         <Text style={styles.shopAddress}>
-                            {shopData?.city}, {shopData?.state} {shopData?.zipCode}
+                            {shopData?.city}, {shopData?.state} {shopData?.zip}
                         </Text>
                         <Text style={styles.shopPhone}>📞 Contact: {shopData?.phoneNumber}</Text>
                     </View>
                 </View>
+                */}
 
                 {/* Time Selection */}
                 <View style={styles.section}>

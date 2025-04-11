@@ -6,25 +6,36 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase';
 
 interface OrderDetails {
-  orderId: string;
-  customerName: string;
-  pickupTime: string;
-  orderNumber: string;
-  shopId: string;
+  order_id: string;
+  customer_name: string;
+  pickup_time: string;
+  order_number: string;
+  shop_id: string;
   status: 'pending' | 'accepted' | 'preparing' | 'ready' | 'completed';
   items: Array<{
     name: string;
     quantity: number;
     price: number;
   }>;
-  totalAmount: number;
+  total_amount: number;
+  total?: number; // Some orders might use total instead of total_amount
+}
+
+interface ShopData {
+  id: string;
+  shop_name: string;
+  street_address: string;
+  city: string;
+  state: string;
+  zip: string;
+  phone_number: string;
 }
 
 const SuccessScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [orderData, setOrderData] = useState<OrderDetails | null>(null);
-  const [shopData, setShopData] = useState<any>(null);
+  const [shopData, setShopData] = useState<ShopData | null>(null);
 
   const getOrderDetails = async () => {
     if (!params.orderId) {
@@ -45,8 +56,8 @@ const SuccessScreen = () => {
 
     setOrderData({
       ...orderData,
-      orderId: orderData.id,
-      pickupTime: orderData.pickup_time,
+      order_id: orderData.id,
+      pickup_time: orderData.pickup_time,
     });
 
     // Fetch realted shop using shop_id from the order
@@ -77,7 +88,7 @@ const SuccessScreen = () => {
     );
   }
 
-  const DetailRow = ({ icon, label, value }: { icon: string; label: string; value?: string }) => (
+  const DetailRow = ({ icon, label, value }: { icon: any; label: string; value?: string }) => (
     <View style={styles.detailRow}>
       <Ionicons name={icon} size={24} color="#6F4E37" style={styles.detailIcon} />
       <View style={styles.detailText}>
@@ -93,35 +104,45 @@ const SuccessScreen = () => {
         <View style={styles.iconContainer}>
           <Ionicons name="checkmark-circle" size={80} color="#4CAF50" />
         </View>
-        
+
         <Text style={styles.title}>Order Confirmed!</Text>
         <Text style={styles.subtitle}>Thank you for ordering with FirstSips</Text>
 
         <View style={styles.detailsContainer}>
-          <DetailRow 
-            icon="time" 
-            label="Pickup Time" 
-            value={orderData.pickupTime} 
+          <DetailRow
+            icon="time"
+            label="Pickup Time"
+            value={orderData.pickup_time}
           />
-          <DetailRow 
-            icon="location" 
-            label="Pickup Location" 
-            value={shopData.shopName} 
+          <DetailRow
+            icon="business"
+            label="Pickup Location"
+            value={shopData.shop_name}
           />
-          <DetailRow 
-            icon="receipt" 
-            label="Order Number" 
-            value={`FS-${orderData.orderId.slice(-6)}`} 
+          <DetailRow
+            icon="location"
+            label="Address"
+            value={`${shopData.street_address}, ${shopData.city}, ${shopData.state} ${shopData.zip}`}
           />
-          <DetailRow 
-            icon="cash" 
-            label="Total Amount" 
-            value={`$${(orderData.totalAmount / 100).toFixed(2)}`} 
+          <DetailRow
+            icon="call"
+            label="Phone"
+            value={shopData.phone_number}
+          />
+          <DetailRow
+            icon="receipt"
+            label="Order Number"
+            value={`FS-${orderData.order_id.slice(-6)}`}
+          />
+          <DetailRow
+            icon="cash"
+            label="Total Amount"
+            value={`$${((orderData.total_amount || orderData.total || 0) / 100).toFixed(2)}`}
           />
         </View>
 
-        <Button 
-          mode="contained" 
+        <Button
+          mode="contained"
           onPress={() => router.push("/(tabs)/dashboard/DashboardScreen")}
           style={styles.button}
         >
@@ -142,6 +163,8 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 12,
     elevation: 4,
+    backgroundColor: '#FFFFFF',
+    marginVertical: 16,
   },
   iconContainer: {
     alignItems: 'center',

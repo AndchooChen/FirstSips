@@ -11,7 +11,7 @@ interface Shop {
     id: string;
     shopName: string;
     profileImage?: string;
-    isOpen: boolean;
+    status: boolean;
     [key: string]: any;
 }
 
@@ -83,14 +83,16 @@ const DashboardScreen = () => {
                 const shopData: Shop = {
                     id: shop.id,
                     shopName: shop.shop_name,
+                    address: shop.street_address,
                     profileImage: shop.profile_image,
-                    isOpen: shop.is_open,
+                    status: shop.status,
                     description: shop.description,
                 };
 
+                console.log(shopData.id, userShopId);
                 if (shopData.id === userShopId) return;
 
-                if (shopData.isOpen) {
+                if (shopData.status) {
                     openShopsList.push(shopData);
                 } else {
                     closedShopsList.push(shopData);
@@ -118,7 +120,7 @@ const DashboardScreen = () => {
         if (hasShop) {
             router.push("../shop_owner/EditShopScreen");
         } else {
-            router.push("../shop_owner/CreateShopScreen");
+            router.push("../../(auth)/CreateShopScreen");
         }
     };
 

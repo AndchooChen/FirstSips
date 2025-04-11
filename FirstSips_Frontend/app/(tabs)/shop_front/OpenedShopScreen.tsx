@@ -148,10 +148,11 @@ const OpenedShopScreen = () => {
   };
 
   const handleOwnerInfo = () => {
-    if (shopData?.ownerId) {
+    console.log(shopData?.owner_id);
+    if (shopData?.owner_id) {
       router.push({
         pathname: "/(tabs)/shop_front/OwnerInfoScreen",
-        params: { ownerId: shopData.ownerId }
+        params: { owner_id: shopData.owner_id }
       });
     }
   };
@@ -178,8 +179,8 @@ const OpenedShopScreen = () => {
         <View style={styles.shopInfo}>
           <Image
             source={
-              shopData?.profileImage
-                ? { uri: shopData.profileImage }
+              shopData?.profile_image
+                ? { uri: shopData.profile_image }
                 : require("../../assets/images/no_shop_image.png")
             }
             style={styles.shopImage}
@@ -187,8 +188,6 @@ const OpenedShopScreen = () => {
           <Text style={styles.shopName}>{shopName}</Text>
           <Text style={styles.shopDescription}>{shopDescription}</Text>
         </View>
-
-
 
         <FlatList
           data={items}

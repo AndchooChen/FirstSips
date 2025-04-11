@@ -1,7 +1,7 @@
 import { Slot, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { supabase } from './utils/supabase'
-// import { Session } from '@supabase/supabase-js'
+import { Session } from '@supabase/supabase-js'
 import Landing from './(public)/LandingScreen'
 
 export default function RootLayout() {

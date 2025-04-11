@@ -30,7 +30,18 @@ const SignUpScreen = () => {
             return
         }
         const user = data?.user;
-        
+        console.log(user)
+
+        const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          
+          if (!session?.user) {
+            console.error("No session, cannot insert user");
+            return;
+          }
+        console.log("Session: ", session);
+
         if (user) {
             const { error: insertError } = await supabase
             .from('users')
@@ -41,8 +52,8 @@ const SignUpScreen = () => {
                     first_name: firstName,
                     last_name: lastName,
                     phone_number: phoneNumber,
-                    isShopOwner: isShopOwner,
-                    shopId: null,
+                    is_shop_owner: false,
+                    shop_id: null,
                 }
             ])
 
@@ -52,8 +63,9 @@ const SignUpScreen = () => {
                 console.log("User profile created");
             }
         }
+        console.log("user created: ", user);
         if (isShopOwner) {
-            router.push("./CreateShopScreen")
+            router.push("./CreateShopScreen");
         } else {
             router.push("../(tabs)/dashboard/DashboardScreen");
         }

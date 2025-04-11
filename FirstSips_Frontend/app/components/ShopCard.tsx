@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 interface Shop {
     shopName: string;
     profileImage?: string;
-    isOpen: boolean;
+    status: boolean;
     description?: string;
 }
 
@@ -27,7 +27,7 @@ const ShopCard = ({ shop, onPress }: ShopCardProps) => {
                 />
                 <View style={[
                     styles.statusIndicator,
-                    { backgroundColor: shop.isOpen ? '#4CAF50' : '#F44336' }
+                    { backgroundColor: shop.status ? '#4CAF50' : '#F44336' }
                 ]} />
             </View>
             <View style={styles.contentContainer}>
@@ -39,9 +39,9 @@ const ShopCard = ({ shop, onPress }: ShopCardProps) => {
                 )}
                 <Text style={[
                     styles.status,
-                    { color: shop.isOpen ? '#4CAF50' : '#F44336' }
+                    { color: shop.status ? '#4CAF50' : '#F44336' }
                 ]}>
-                    {shop.isOpen ? 'Open' : 'Closed'}
+                    {shop.status ? 'Open' : 'Closed'}
                 </Text>
             </View>
         </TouchableOpacity>
