@@ -7,18 +7,29 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from "expo-router";
 import { supabase } from '@/app/utils/supabase';
 
+interface ShopItem {
+    id: string;
+    name: string;
+    price: number;
+    quantity: number;
+    images?: string[];
+    description?: string;
+    shop_id: string;
+}
+
 export default function EditShopScreen() {
     const [shopName, setShopName] = useState("My Coffee Shop");
     const [status, setStatus] = useState(false);
     const [profileImage, setProfileImage] = useState<string | null>(null);
     const [showNameModal, setShowNameModal] = useState(false);
     const [tempShopName, setTempShopName] = useState(shopName);
-    const [items, setItems] = useState([]);
+    const [items, setItems] = useState<ShopItem[]>([]);
+    const [stripeConnected, setStripeConnected] = useState(false);
     const router = useRouter();
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ImagePicker.MediaTypeOptions.Images as any,
             allowsEditing: true,
             aspect: [1, 1],
             quality: 1,
@@ -37,81 +48,81 @@ export default function EditShopScreen() {
         const {
             data: { user },
         } = await supabase.auth.getUser();
-      
+
         if (!user) {
             alert("Not authenticated");
             return;
         }
-      
+
         const { data, error } = await supabase
             .from("users")
             .select("shop_id")
             .eq("id", user.id)
             .single();
-      
+
         if (error || !data?.shop_id) {
             alert("Shop not found");
             return;
         }
-      
+
         router.push({
             pathname: "/(tabs)/shop_owner/OrderManagementScreen",
             params: { shopId: data.shop_id },
         });
     };
-      
+
 
     const handleAddProduct = async () => {
         const {
             data: { user },
         } = await supabase.auth.getUser();
-      
+
         if (!user) {
             alert("Not authenticated");
             return;
         }
-      
+
         const { data, error } = await supabase
             .from("users")
             .select("shop_id")
             .eq("id", user.id)
             .single();
-      
+
         if (error || !data?.shop_id) {
             alert("Please create a shop first");
-            router.push("/(tabs)/shop_owner/CreateShopScreen");
+            router.push("/shop_owner/CreateShopScreen" as any);
             return;
         }
-      
+
         router.push("/(tabs)/shop_owner/AddItemScreen");
       };
-      
+
 
     const handleDeleteItem = async (itemId: string) => {
         const {
             data: { user },
         } = await supabase.auth.getUser();
-      
+
         if (!user) return;
-      
+
         const { data, error } = await supabase
             .from("users")
             .select("shop_id")
             .eq("id", user.id)
             .single();
-      
+
         if (error || !data?.shop_id) {
             alert("Shop not found");
             return;
         }
-      
+
         if (confirm("Are you sure you want to delete this item?")) {
             const { error: deleteError } = await supabase
                 .from("items")
                 .delete()
                 .eq("id", itemId)
                 .eq("shop_id", data.shop_id);
-      
+
             if (deleteError) {
                 console.error("Error deleting item:", deleteError);
                 alert("Failed to delete item");
@@ -120,28 +131,28 @@ export default function EditShopScreen() {
             }
         }
     };
-      
+
     const handleSaveChanges = async () => {
         const {
             data: { user },
         } = await supabase.auth.getUser();
-      
+
         if (!user) {
             alert("Not authenticated");
             return;
         }
-      
+
         const { data, error } = await supabase
             .from("users")
             .select("shop_id")
             .eq("id", user.id)
             .single();
-      
+
         if (error || !data?.shop_id) {
             alert("No shop found");
             return;
         }
-      
+
         const { error: updateError } = await supabase
             .from("shops")
             .update({
@@ -151,7 +162,7 @@ export default function EditShopScreen() {
                 updated_at: new Date().toISOString(),
             })
             .eq("id", data.shop_id);
-      
+
         if (updateError) {
             console.error("Error updating shop:", updateError);
             alert("Failed to update shop");
@@ -160,27 +171,27 @@ export default function EditShopScreen() {
             router.push("/(tabs)/dashboard/DashboardScreen");
         }
     };
-      
+
 
     useEffect(() => {
         let intervalId: any;
-      
+
         const fetchShopData = async () => {
             const {
                 data: { user },
             } = await supabase.auth.getUser();
-      
+
             if (!user) return;
-            
+
             const { data: userData } = await supabase
                 .from("users")
                 .select("shop_id")
                 .eq("id", user.id)
                 .single();
-      
+
             if (!userData?.shop_id) return;
 
-            const { data: shopData, error } = await supabase
+            const { data: shopData } = await supabase
                 .from("shops")
                 .select("*")
                 .eq("id", userData.shop_id)
@@ -189,6 +200,7 @@ export default function EditShopScreen() {
             setShopName(shopData?.shop_name || "My Coffee Shop");
             setStatus(shopData?.status || false);
             setProfileImage(shopData?.profile_image || null);
+            setStripeConnected(shopData?.stripe_account_id ? true : false);
 
             console.log(shopData);
         };
@@ -197,42 +209,42 @@ export default function EditShopScreen() {
             const {
                 data: { user },
             } = await supabase.auth.getUser();
-      
+
             if (!user) return;
-      
+
             const { data: userData } = await supabase
                 .from("users")
                 .select("shop_id")
                 .eq("id", user.id)
                 .single();
-      
+
             if (!userData?.shop_id) return;
-      
+
             const fetch = async () => {
                 const { data: itemsData, error } = await supabase
                     .from("items")
                     .select("*")
                     .eq("shop_id", userData.shop_id);
-      
+
                 if (error) {
                     console.error("Error fetching items:", error);
                 } else {
                     setItems(itemsData);
                 }
             };
-      
+
             await fetch();
-      
+
             // Poll every 10 seconds (optional)
             intervalId = setInterval(fetch, 10000);
         };
 
         fetchShopData();
         fetchItems();
-      
+
         return () => clearInterval(intervalId);
       }, []);
-      
+
 
     return (
         <View style={styles.background}>
@@ -243,9 +255,29 @@ export default function EditShopScreen() {
 
                 <Text style={styles.headerTitle}>Edit Shop</Text>
 
-                <TouchableOpacity onPress={handleOrderQueuePress} style={styles.headerButton}>
-                    <Ionicons name="list" size={24} color="#6F4E37" />
-                </TouchableOpacity>
+                <View style={styles.headerButtonsContainer}>
+                    <TouchableOpacity
+                        onPress={() => router.push("/(auth)/StripeConnectScreen")}
+                        style={[styles.headerButton, styles.stripeButton]}
+                    >
+                        <View style={styles.stripeButtonContent}>
+                            <Ionicons
+                                name={stripeConnected ? "card" : "card-outline"}
+                                size={24}
+                                color={stripeConnected ? "#4CAF50" : "#6F4E37"}
+                            />
+                            <Text style={[styles.stripeButtonText, stripeConnected && styles.stripeConnectedText]}>
+                                {stripeConnected ? "Payments" : "Payments"}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleOrderQueuePress} style={styles.headerButton}>
+                        <View style={styles.stripeButtonContent}>
+                            <Ionicons name="list" size={24} color="#6F4E37" />
+                            <Text style={styles.stripeButtonText}>Orders</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Profile Image Section */}
@@ -289,15 +321,15 @@ export default function EditShopScreen() {
                                     data: { user },
                                 } = await supabase.auth.getUser();
                                 if (!user) return;
-                                
-                                const { data, error } = await supabase
+
+                                const { data } = await supabase
                                 .from("users")
                                 .select("shop_id")
                                 .eq("id", user.id)
                                 .single();
-                                
+
                                 const shopId = data?.shop_id;
-                                  
+
                                 router.push({
                                     pathname: "/(tabs)/shop_owner/EditItemScreen",
                                     params: { shopId: shopId, itemId: item.id }
@@ -398,6 +430,26 @@ const styles = StyleSheet.create({
     },
     headerButton: {
         padding: 8,
+    },
+    headerButtonsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    stripeButton: {
+        marginRight: 8,
+    },
+    stripeButtonContent: {
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stripeButtonText: {
+        fontSize: 10,
+        marginTop: 2,
+        color: '#6F4E37',
+    },
+    stripeConnectedText: {
+        color: '#4CAF50',
     },
     imageContainer: {
         alignItems: 'center',

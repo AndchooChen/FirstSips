@@ -36,13 +36,32 @@ const CheckoutScreen = () => {
         userId: '',
     });
     const [pickupTime, setPickupTime] = useState('');
-    const [shopData, setShopData] = useState<ShopData | null>(null);
+    // Shop data is fetched but not currently used in the UI
+    const [_shopData, _setShopData] = useState<ShopData | null>(null);
     const [loading, setLoading] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
     const router = useRouter();
     const params = useLocalSearchParams();
-    const { items, shopId } = params;
+    const { items: itemsParam, shopId } = params;
+
+    // Parse cart items from URL params
+    useEffect(() => {
+        if (itemsParam) {
+            try {
+                const parsedItems = JSON.parse(itemsParam as string);
+                setCartItems(parsedItems);
+            } catch (error) {
+                console.error('Error parsing cart items:', error);
+                Alert.alert('Error', 'There was a problem loading your cart items');
+                router.back();
+            }
+        } else {
+            // No items in cart, go back
+            Alert.alert('Empty Cart', 'Please add items to your cart');
+            router.back();
+        }
+    }, [itemsParam]);
 
     // Time picker state
     const [date, setDate] = useState(new Date());
@@ -56,33 +75,33 @@ const CheckoutScreen = () => {
             .select("*")
             .eq("id", itemId)
             .single();
-      
+
           if (error || !itemData) {
             return { available: false, message: "Item no longer exists" };
           }
-      
+
           if (itemData.quantity === -2) {
             return { available: false, message: "This item is not available for purchase." };
           }
-      
+
           if (itemData.quantity === -1) {
             return { available: true };
           }
-      
+
           if (requestedQuantity > itemData.quantity) {
             return {
               available: false,
               message: `Sorry, only ${itemData.quantity} items available in stock.`,
             };
           }
-      
+
           return { available: true };
         } catch (error) {
           console.error("Error checking item availability:", error);
           return { available: false, message: "Error checking availability" };
         }
       };
-      
+
 
     // Function to update cart items
     const updateCartItem = async (itemId: string, changeType: 'increase' | 'decrease') => {
@@ -125,16 +144,7 @@ const CheckoutScreen = () => {
         });
     };
 
-    // Parse cart items from params with type safety
-    useEffect(() => {
-        try {
-            const parsedItems = JSON.parse(items as string || '[]');
-            setCartItems(parsedItems);
-        } catch (error) {
-            console.error('Error parsing cart items:', error);
-            setCartItems([]);
-        }
-    }, [items]);
+    // Cart items are now parsed in the useEffect above
 
     // Calculate totals with error handling
     const totals = useMemo(() => {
@@ -151,59 +161,97 @@ const CheckoutScreen = () => {
     }, [cartItems]);
 
     const fetchPaymentSheetParams = async () => {
-        const {
-            data: {user},
-            error: authError,
-        } = await supabase.auth.getUser();
+        try {
+            // Get current user
+            const {
+                data: {user}
+            } = await supabase.auth.getUser();
 
-        const userId = user?.id;
+            const userId = user?.id;
 
-        if (!userId) {
-            throw new Error('User not authenticated');
-        }
+            if (!userId) {
+                throw new Error('User not authenticated');
+            }
 
-        console.log("Fetching payment sheet params");
-        const response = await fetch(`${API_URL}/payments/payment-sheet`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                amount: Math.round(totals.total * 100),
-                currency: 'usd',
-                customerId: userId,
-                shopId
-            }),
-        });
+            // Validate shopId
+            if (!shopId) {
+                throw new Error('Shop ID is missing');
+            }
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Payment sheet error:', {
-                status: response.status,
-                statusText: response.statusText,
-                body: errorText
+            // Clean the shopId to ensure it's properly formatted
+            const cleanShopId = String(shopId).trim();
+
+            // Verify the shop exists and has Stripe set up
+            const { data: shopData, error: shopError } = await supabase
+                .from("shops")
+                .select("id, stripe_account_id")
+                .eq("id", cleanShopId)
+                .single();
+
+            if (shopError || !shopData) {
+                console.error('Shop verification error:', shopError);
+                throw new Error('Shop not found in database');
+            }
+
+            if (!shopData.stripe_account_id) {
+                throw new Error('This shop has not set up payment processing yet');
+            }
+
+            console.log("Fetching payment sheet params for shop:", cleanShopId);
+            console.log("Totals:", totals);
+
+            const response = await fetch(`${API_URL}/payments/payment-sheet`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    amount: Math.round(totals.total * 100),
+                    currency: 'usd',
+                    customerId: userId,
+                    shopId: cleanShopId
+                }),
             });
-            throw new Error(`Failed to fetch payment sheet: ${errorText}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Payment sheet error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
+                throw new Error(`Failed to fetch payment sheet: ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log("Payment sheet params:", data);
+
+            return {
+                paymentIntent: data.paymentIntent,
+                ephemeralKey: data.ephemeralKey,
+                customer: data.customer,
+            };
+        } catch (error: any) {
+            console.error('Error in fetchPaymentSheetParams:', error);
+            Alert.alert(
+                'Payment Setup Error',
+                error.message || 'Unable to set up payment. Please try again.'
+            );
+            throw error;
         }
-
-        const data = await response.json();
-        console.log("Payment sheet params:", data);
-
-        return {
-            paymentIntent: data.paymentIntent,
-            ephemeralKey: data.ephemeralKey,
-            customer: data.customer,
-        };
     };
 
     const initializePaymentSheet = async () => {
         try {
             console.log("Initializing payment sheet");
+            setIsProcessing(true);
+
             const {
                 paymentIntent,
                 ephemeralKey,
                 customer,
             } = await fetchPaymentSheetParams();
+
             console.log("Payment sheet params fetched");
             const { error } = await initPaymentSheet({
                 merchantDisplayName: "FirstSips",
@@ -219,22 +267,27 @@ const CheckoutScreen = () => {
             });
 
             if (error) {
-                Alert.alert('Error', error.message);
-            } else {
-                setLoading(true);
+                console.error('Payment sheet initialization error:', error);
+                Alert.alert('Payment Setup Error', error.message);
+                return;
             }
-        } catch (error) {
+
+            setLoading(true);
+            console.log("Payment sheet initialized successfully");
+        } catch (error: any) {
             console.error('Error initializing payment sheet:', error);
-            Alert.alert('Error', 'Unable to initialize payment');
+            // Don't show another alert as fetchPaymentSheetParams already shows one
+        } finally {
+            setIsProcessing(false);
         }
     };
 
     const handlePayment = async () => {
         if (!loading) return;
-      
+
         try {
           setIsProcessing(true);
-      
+
           for (const item of cartItems) {
             const result = await checkItemAvailability(item.id, item.quantity);
             if (!result.available) {
@@ -243,41 +296,69 @@ const CheckoutScreen = () => {
               return;
             }
           }
-      
+
           const { error: paymentError } = await presentPaymentSheet();
-      
+
           if (paymentError) {
             Alert.alert("Error", paymentError.message);
             return;
           }
-      
+
+          // Create the order first
           const { data: orderData, error: orderError } = await supabase
             .from("orders")
             .insert([
               {
                 user_id: customerInfo.userId,
                 shop_id: shopId,
-                items: cartItems,
                 total: parseFloat(totals.total.toFixed(2)),
                 status: "pending",
                 pickup_time: pickupTime,
+                created_at: new Date().toISOString(),
               },
             ])
             .select()
             .single();
-      
+
           if (orderError) {
             throw orderError;
           }
-      
-          // Update item quantities
+
+          console.log('Order created with ID:', orderData.id);
+
+          // Now create entries in the order_items table for each item
+          const orderItemsPromises = cartItems.map(item => {
+            return supabase
+              .from("order_items")
+              .insert({
+                order_id: orderData.id,
+                item_id: item.id,
+                quantity: item.quantity,
+                price: item.price,
+                created_at: new Date().toISOString()
+              });
+          });
+
+          // Wait for all order items to be inserted
+          const orderItemsResults = await Promise.all(orderItemsPromises);
+
+          // Check if any order items failed to insert
+          const orderItemsErrors = orderItemsResults.filter(result => result.error);
+          if (orderItemsErrors.length > 0) {
+            console.error('Errors inserting order items:', orderItemsErrors);
+            throw new Error('Failed to create some order items');
+          }
+
+          console.log('Successfully created', orderItemsResults.length, 'order items');
+
+          // Update item quantities in inventory
           for (const item of cartItems) {
-            const { data: itemData, error: fetchError } = await supabase
+            const { data: itemData } = await supabase
               .from("items")
               .select("quantity")
               .eq("id", item.id)
               .single();
-      
+
             if (itemData && itemData.quantity !== -1 && itemData.quantity !== -2) {
               const newQuantity = itemData.quantity - item.quantity;
               await supabase
@@ -286,7 +367,7 @@ const CheckoutScreen = () => {
                 .eq("id", item.id);
             }
           }
-      
+
           Alert.alert("Success", "Your order has been placed!");
           router.push({
             pathname: "/(checkout)/SuccessScreen",
@@ -299,79 +380,98 @@ const CheckoutScreen = () => {
           setIsProcessing(false);
         }
       };
-      
+
 
     useEffect(() => {
-        initializePaymentSheet();
-    }, [totals.total, shopId, customerInfo]);
+        // Only initialize payment sheet when we have all required data
+        if (shopId && customerInfo.userId && cartItems.length > 0 && totals.total > 0) {
+            // Add a small delay to ensure all state is properly updated
+            const timer = setTimeout(() => {
+                initializePaymentSheet();
+            }, 500);
+
+            return () => clearTimeout(timer);
+        }
+    }, [totals.total, shopId, customerInfo, cartItems]);
 
     // Fetch user data
     useEffect(() => {
         const getUserData = async () => {
-          const user = supabase.auth.user();
-          if (!user) {
+          const { data: { user }, error: authError } = await supabase.auth.getUser();
+          if (authError || !user) {
             alert("User not authenticated");
             setLoading(false);
             return;
           }
-      
-          const { data: userData, error } = await supabase
+
+          const { data: userData, error: userDataError } = await supabase
             .from("users")
             .select("*")
             .eq("id", user.id)
             .single();
-      
-          if (error || !userData) {
+
+          if (userDataError || !userData) {
             alert("User data not found");
           } else {
             const name = `${userData.first_name || ""} ${userData.last_name || ""}`.trim();
             const phoneNumber = userData.phone_number || "";
-      
+
             setCustomerInfo({
               name,
               phoneNumber,
               userId: user.id,
             });
           }
-      
+
           setLoading(false);
         };
-      
+
         getUserData();
       }, []);
-      
+
 
     // Fetch shop data
     useEffect(() => {
         const fetchShopData = async () => {
           if (!shopId) return;
-      
+
+          // Clean the shopId to ensure it's properly formatted
+          const cleanShopId = String(shopId).trim();
+
           const { data: shopData, error: shopError } = await supabase
             .from("shops")
-            .select("*")
-            .eq("id", shopId)
+            .select("*, stripe_account_id")
+            .eq("id", cleanShopId)
             .single();
-      
+
           if (shopError || !shopData) {
-            alert("Shop data not found");
+            console.error('Shop data not found:', shopError);
+            Alert.alert("Error", "Shop data not found. Please try again.");
+            router.back();
             return;
           }
-      
-          const { data: ownerData, error: ownerError } = await supabase
+
+          // Check if shop has Stripe set up
+          if (!shopData.stripe_account_id) {
+            console.warn('Shop does not have Stripe set up:', cleanShopId);
+            // We'll continue anyway, but payment will fail later
+          }
+
+          const { data: ownerData } = await supabase
             .from("users")
             .select("phone_number")
             .eq("id", shopData.owner_id)
             .single();
-      
-          setShopData({
+
+          _setShopData({
             ...shopData,
             phoneNumber: ownerData?.phone_number || "No phone number available",
           });
         };
-      
+
         fetchShopData();
       }, [shopId]);
-      
+
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -417,7 +517,7 @@ const CheckoutScreen = () => {
                 </View>
 
                 {/*
-                
+
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Pickup Location</Text>
                     <View style={styles.shopInfo}>

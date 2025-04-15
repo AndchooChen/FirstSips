@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-<<<<<<< HEAD
-const admin = require('firebase-admin');
-const db = admin.firestore();
+const supabase = require('../config/supabase-config');
 
 // Unified payment-sheet endpoint
 router.post('/payment-sheet', async (req, res) => {
@@ -19,13 +17,17 @@ router.post('/payment-sheet', async (req, res) => {
     }
 
     // Get shop owner's Stripe account ID
-    const shopDoc = await db.collection('shops').doc(shopId).get();
-    if (!shopDoc.exists) {
+    const { data: shopData, error: shopError } = await supabase
+      .from('shops')
+      .select('stripe_account_id')
+      .eq('id', shopId)
+      .single();
+
+    if (shopError || !shopData) {
       return res.status(404).json({ error: 'Shop not found' });
     }
 
-    const shopData = shopDoc.data();
-    const shopOwnerStripeAccountId = shopData.stripeAccountId;
+    const shopOwnerStripeAccountId = shopData.stripe_account_id;
 
     if (!shopOwnerStripeAccountId) {
       return res.status(400).json({ error: 'Shop owner has not completed Stripe onboarding' });
@@ -35,7 +37,7 @@ router.post('/payment-sheet', async (req, res) => {
     try {
       const account = await stripe.accounts.retrieve(shopOwnerStripeAccountId);
       if (!account.capabilities.transfers === 'active') {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Shop account does not have transfers capability enabled. Please complete the Stripe onboarding process.',
           code: 'incomplete_onboarding'
         });
@@ -84,7 +86,7 @@ router.post('/payment-sheet', async (req, res) => {
       },
       metadata: {
         shopId,
-        firebaseUserId: customerId
+        userId: customerId
       }
     });
 
@@ -99,8 +101,6 @@ router.post('/payment-sheet', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-=======
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
 
 // Create Payment Intent
 router.post('/create-payment-intent', async (req, res) => {
@@ -116,15 +116,11 @@ router.post('/create-payment-intent', async (req, res) => {
       currency,
       automatic_payment_methods: {
         enabled: true,
-<<<<<<< HEAD
       },
       payment_method_types: ['card'],
       transfer_data: {
           destination: shopOwnerStripeAccountId,
       },
-=======
-      }
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
     });
 
     res.json({
@@ -137,7 +133,7 @@ router.post('/create-payment-intent', async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
+/*
 // Webhook
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -152,17 +148,26 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
     if (event.type === 'payment_intent.succeeded') {
       const paymentIntent = event.data.object;
-      // Update order status in Firestore
+      // Update order status in Supabase
       if (paymentIntent.metadata.shopId) {
-        const ordersRef = db.collection('orders');
-        const orderQuery = await ordersRef.where('paymentIntentId', '==', paymentIntent.id).get();
-        
-        if (!orderQuery.empty) {
-          const orderDoc = orderQuery.docs[0];
-          await orderDoc.ref.update({
-            status: 'paid',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          });
+        const { data: orderData, error: orderError } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('payment_intent_id', paymentIntent.id)
+          .single();
+
+        if (!orderError && orderData) {
+          const { error: updateError } = await supabase
+            .from('orders')
+            .update({
+              status: 'paid',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', orderData.id);
+
+          if (updateError) {
+            console.error('Error updating order status:', updateError);
+          }
         }
       }
     }
@@ -171,45 +176,8 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   } catch (error) {
     console.error('Webhook error:', error.message);
     res.status(400).send(`Webhook Error: ${error.message}`);
-=======
-// Webhook handler
-router.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  try {
-    const event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        const paymentIntent = event.data.object;
-        // Handle successful payment
-        console.log('Payment succeeded:', paymentIntent.id);
-        // TODO: Update order status in your database
-        break;
-      case 'payment_intent.payment_failed':
-        // Handle failed payment
-        console.log('Payment failed:', event.data.object.id);
-        break;
-    }
-
-    res.json({ received: true });
-  } catch (err) {
-    console.error('Webhook Error:', err.message);
-    res.status(400).send(`Webhook Error: ${err.message}`);
   }
 });
-
-// Get payment status
-router.get('/status/:paymentIntentId', async (req, res) => {
-  try {
-    const { paymentIntentId } = req.params;
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    res.json({ status: paymentIntent.status });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
->>>>>>> 68fb1e5fa391f1bdac2f665bb27bc781ec148f7d
-  }
-});
+*/
 
 module.exports = router;

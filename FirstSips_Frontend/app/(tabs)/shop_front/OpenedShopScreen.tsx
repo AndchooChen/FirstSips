@@ -138,6 +138,7 @@ const OpenedShopScreen = () => {
       return;
     }
 
+    console.log("Shop ID:", shopId);
     router.push({
       pathname: "../../(checkout)/CheckoutScreen",
       params: {

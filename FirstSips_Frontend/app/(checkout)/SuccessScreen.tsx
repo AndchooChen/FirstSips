@@ -12,13 +12,18 @@ interface OrderDetails {
   order_number: string;
   shop_id: string;
   status: 'pending' | 'accepted' | 'preparing' | 'ready' | 'completed';
-  items: Array<{
-    name: string;
-    quantity: number;
-    price: number;
-  }>;
   total_amount: number;
   total?: number; // Some orders might use total instead of total_amount
+}
+
+interface OrderItem {
+  id: string;
+  order_id: string;
+  item_id: string;
+  quantity: number;
+  price: number;
+  name?: string; // Added after joining with items table
+  description?: string; // Added after joining with items table
 }
 
 interface ShopData {
@@ -36,6 +41,7 @@ const SuccessScreen = () => {
   const params = useLocalSearchParams();
   const [orderData, setOrderData] = useState<OrderDetails | null>(null);
   const [shopData, setShopData] = useState<ShopData | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
 
   const getOrderDetails = async () => {
     if (!params.orderId) {
@@ -60,7 +66,41 @@ const SuccessScreen = () => {
       pickup_time: orderData.pickup_time,
     });
 
-    // Fetch realted shop using shop_id from the order
+    // Fetch order items
+    const { data: orderItemsData, error: orderItemsError } = await supabase
+      .from('order_items')
+      .select(`
+        id,
+        order_id,
+        item_id,
+        quantity,
+        price,
+        items(name, description)
+      `)
+      .eq('order_id', orderData.id);
+
+    if (!orderItemsError && orderItemsData) {
+      // Process the joined data to flatten the structure
+      const processedItems = orderItemsData.map(item => {
+        // Handle the nested items object from the join
+        const itemDetails = item.items as any;
+        return {
+          id: item.id,
+          order_id: item.order_id,
+          item_id: item.item_id,
+          quantity: item.quantity,
+          price: item.price,
+          name: itemDetails?.name || 'Unknown Item',
+          description: itemDetails?.description || ''
+        };
+      });
+
+      setOrderItems(processedItems);
+    } else {
+      console.error('Error fetching order items:', orderItemsError);
+    }
+
+    // Fetch related shop using shop_id from the order
     const { data: shopData, error: shopError } = await supabase
       .from("shops")
       .select("*")
@@ -87,6 +127,18 @@ const SuccessScreen = () => {
       </SafeAreaView>
     );
   }
+
+  // Calculate total from order items if needed
+  const calculateTotal = () => {
+    if (orderData.total_amount || orderData.total) {
+      return ((orderData.total_amount || orderData.total || 0) / 100).toFixed(2);
+    }
+
+    // Calculate from order items if no total is available
+    return orderItems
+      .reduce((sum, item) => sum + (item.price * item.quantity), 0)
+      .toFixed(2);
+  };
 
   const DetailRow = ({ icon, label, value }: { icon: any; label: string; value?: string }) => (
     <View style={styles.detailRow}>
@@ -137,9 +189,25 @@ const SuccessScreen = () => {
           <DetailRow
             icon="cash"
             label="Total Amount"
-            value={`$${((orderData.total_amount || orderData.total || 0) / 100).toFixed(2)}`}
+            value={`$${calculateTotal()}`}
           />
         </View>
+
+        {/* Order Items Section */}
+        {orderItems.length > 0 && (
+          <View style={styles.orderItemsContainer}>
+            <Text style={styles.orderItemsTitle}>Order Items</Text>
+            {orderItems.map((item) => (
+              <View key={item.id} style={styles.orderItemRow}>
+                <View style={styles.orderItemInfo}>
+                  <Text style={styles.orderItemName}>{item.name}</Text>
+                  <Text style={styles.orderItemQuantity}>Qty: {item.quantity}</Text>
+                </View>
+                <Text style={styles.orderItemPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <Button
           mode="contained"
@@ -209,6 +277,43 @@ const styles = StyleSheet.create({
   button: {
     marginTop: 16,
     backgroundColor: '#6F4E37',
+  },
+  orderItemsContainer: {
+    marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    paddingTop: 16,
+  },
+  orderItemsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#6F4E37',
+    marginBottom: 12,
+  },
+  orderItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  orderItemInfo: {
+    flex: 1,
+  },
+  orderItemName: {
+    fontSize: 16,
+    color: '#333333',
+  },
+  orderItemQuantity: {
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 4,
+  },
+  orderItemPrice: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#6F4E37',
   },
 });
 

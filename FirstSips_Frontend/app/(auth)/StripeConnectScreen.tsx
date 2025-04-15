@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, ActivityIndicator, Alert, TouchableOpacity, StyleSheet } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import * as Linking from 'expo-linking';
+import { View, Text, ActivityIndicator, Alert, TouchableOpacity, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+// import { makeRedirectUri } from 'expo-auth-session'; // Not using this anymore
 import { API_URL } from '../config/api';
 import ScreenWideButton from '../components/ScreenWideButton';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,70 +13,27 @@ const StripeConnectScreen = () => {
     const [email, setEmail] = useState('');
     const [shopId, setShopId] = useState('');
     const router = useRouter();
-    const params = useLocalSearchParams();
 
+    // Get user data when component mounts
     useEffect(() => {
-        const handleDeepLink = async (url: string | null) => {
-            if (!url) return;
-
-            try {
-                const parsedUrl = Linking.parse(url);
-                console.log('Received deep link:', parsedUrl); // Debug log
-
-                // Check if the URL path matches our success or error routes
-                if (url.includes('stripe-success')) {
-                    const shopId = parsedUrl.queryParams?.shop_id;
-                    Alert.alert(
-                        'Success',
-                        'Your Stripe account has been connected successfully!',
-                        [{
-                            text: 'OK',
-                            onPress: () => router.push('/(tabs)/shop_owner/EditShopScreen')
-                        }]
-                    );
-                } else if (url.includes('stripe-error')) {
-                    Alert.alert(
-                        'Error',
-                        'There was an error connecting your Stripe account. Please try again.',
-                        [{
-                            text: 'OK',
-                            onPress: () => setLoading(false)
-                        }]
-                    );
-                }
-            } catch (error) {
-                console.error('Deep link parsing error:', error);
-                setLoading(false);
-            }
-        };
-
-        // Handle initial URL
-        Linking.getInitialURL().then(handleDeepLink);
-
-        // Handle deep links while app is running
-        const subscription = Linking.addEventListener('url', ({ url }) => {
-            handleDeepLink(url);
-        });
-
-        return () => {
-            subscription.remove();
-        };
-    }, [router]);
+        getUserEmail();
+        getUserShopId();
+    }, []);
 
     const getUserId = async () => {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-            
+
         if (!user || authError) {
             console.error('Auth error:', authError);
-            return;
+            return null;
         }
 
-        const userId = user.id;
-        return userId
+        return user.id;
     }
 
     const getUserShopId = async () => {
         const userId = await getUserId();
+        if (!userId) return;
 
         const { data: userData, error: userError } = await supabase
             .from("users")
@@ -93,6 +51,7 @@ const StripeConnectScreen = () => {
 
     const getUserEmail = async () => {
         const userId = await getUserId();
+        if (!userId) return;
 
         const {data: userEmail, error: userEmailError} = await supabase
             .from("users")
@@ -108,33 +67,68 @@ const StripeConnectScreen = () => {
         setEmail(userEmail.email);
     }
 
+    const updateUserStripeStatus = async () => {
+        const userId = await getUserId();
+        if (!userId) return;
+
+        try {
+            const { error: updateError } = await supabase
+                .from("users")
+                .update({ stripe_connected: true })
+                .eq("id", userId);
+
+            if (updateError) {
+                console.error('Error updating user stripe status:', updateError);
+            }
+        } catch (error) {
+            console.error('Error updating user stripe status:', error);
+        }
+    }
+
     const handleStripeOnboarding = async () => {
         try {
             setLoading(true);
 
+            if (!shopId) {
+                throw new Error("Shop ID not found. Please create a shop first.");
+            }
+
+            if (!email) {
+                throw new Error("Email not found. Please update your profile.");
+            }
+
+            // For Stripe Connect, we'll use a custom redirect approach
+            // Instead of using the Expo development server URL which Stripe doesn't accept
+            const redirectUri = 'firstsips://stripe-callback';
+
+            // We'll still use the WebBrowser with this URI
+            console.log('Using redirect URI:', redirectUri);
+
             // Step 1: Create Stripe Account
             const accountResponse = await fetch(`${API_URL}/stripe/create-account`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json' 
+                headers: {
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ email })
             });
-            
+
             if (!accountResponse.ok) {
                 const error = await accountResponse.json();
                 throw new Error(error.error || 'Failed to create Stripe account');
             }
 
             const accountData = await accountResponse.json();
+            console.log('Created Stripe account:', accountData.accountId);
 
-            // Step 2: Get Onboarding Link
+            // Step 2: Get Onboarding Link with our redirect URI
             const linkResponse = await fetch(`${API_URL}/stripe/create-onboarding-link`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     accountId: accountData.accountId,
-                    shopId: shopId
+                    shopId: shopId,
+                    redirectUri // Pass this to backend
                 })
             });
 
@@ -144,25 +138,126 @@ const StripeConnectScreen = () => {
             }
 
             const linkData = await linkResponse.json();
+            console.log('Got onboarding link:', linkData.url);
 
             // Step 3: Open the onboarding link in a browser
-            await Linking.openURL(linkData.url);
+            console.log('Opening WebBrowser...');
 
+            // We're using a simpler approach now - just open the URL
+            // The backend will handle the redirect back to our app
+            const result = await WebBrowser.openAuthSessionAsync(
+                linkData.url,
+                redirectUri
+            );
+            console.log('WebBrowser result:', result);
+
+            // Check if we got a successful result
+            if (result.type === 'success') {
+                try {
+                    // Parse the returned URL
+                    const returnedUrl = result.url;
+                    console.log('Returned URL:', returnedUrl);
+
+                    // Extract parameters from the URL
+                    const params = new URLSearchParams(returnedUrl.split('?')[1]);
+                    const success = params.get('success');
+                    const accountId = params.get('account_id');
+                    const shopId = params.get('shop_id');
+                    const stripeEnabled = params.get('stripe_enabled') === 'true';
+                    const payoutsEnabled = params.get('payouts_enabled') === 'true';
+                    const detailsSubmitted = params.get('details_submitted') === 'true';
+
+                    console.log('Received params:', {
+                        success, accountId, shopId,
+                        stripeEnabled, payoutsEnabled, detailsSubmitted
+                    });
+
+                    if (success === 'true' && accountId) {
+                        console.log('Stripe onboarding successful for account:', accountId);
+
+                        // Update the user's stripe_connected flag
+                        await updateUserStripeStatus();
+
+                        // The backend has already updated the shop's Stripe account information
+                        // We can use the parameters passed back to determine the status
+                        if (stripeEnabled) {
+                            // Show success message and navigate back
+                            Alert.alert(
+                                'Success',
+                                'Your Stripe account has been connected successfully!',
+                                [{
+                                    text: 'OK',
+                                    onPress: () => router.push('/(tabs)/shop_owner/EditShopScreen')
+                                }]
+                            );
+                        } else {
+                            // Account created but not fully set up
+                            Alert.alert(
+                                'Almost Done',
+                                'Your Stripe account has been created, but you need to complete the setup to enable payments.',
+                                [{
+                                    text: 'OK',
+                                    onPress: () => setLoading(false)
+                                }]
+                            );
+                        }
+                    } else {
+                        // Handle error case
+                        const errorMsg = params.get('error') || 'Unknown error';
+                        Alert.alert(
+                            'Error',
+                            `There was an error connecting your Stripe account: ${errorMsg}`,
+                            [{
+                                text: 'OK',
+                                onPress: () => setLoading(false)
+                            }]
+                        );
+                    }
+                } catch (error) {
+                    console.error('Error processing WebBrowser result:', error);
+                    Alert.alert(
+                        'Error',
+                        'There was a problem processing the Stripe response. Please try again.',
+                        [{
+                            text: 'OK',
+                            onPress: () => setLoading(false)
+                        }]
+                    );
+                }
+            } else if (result.type === 'cancel') {
+                // User canceled the process
+                Alert.alert(
+                    'Canceled',
+                    'Stripe account setup was canceled.',
+                    [{
+                        text: 'OK',
+                        onPress: () => setLoading(false)
+                    }]
+                );
+            } else {
+                // Some other error occurred
+                Alert.alert(
+                    'Error',
+                    'There was a problem with the Stripe connection process. Please try again.',
+                    [{
+                        text: 'OK',
+                        onPress: () => setLoading(false)
+                    }]
+                );
+            }
         } catch (error: any) {
             console.error('Stripe Connect Error:', error);
             Alert.alert('Error', error.message || 'Failed to connect with Stripe');
+        } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        getUserEmail();
-        getUserShopId();
-    }, []);
+
 
     return (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: "#F5EDD8" }}>
-            <TouchableOpacity 
+            <TouchableOpacity
                 style={styles.backButton}
                 onPress={() => router.back()}
             >

@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const admin = require('firebase-admin');
-const db = admin.firestore();
+const supabase = require('../config/supabase-config');
 
 // Route to create a Stripe Connect Express account
 router.post('/create-account', async (req, res) => {
@@ -40,22 +39,54 @@ router.post('/create-account', async (req, res) => {
 
 // Route to generate an onboarding link
 router.post('/create-onboarding-link', async (req, res) => {
-    const { accountId, shopId } = req.body;
+    const { accountId, shopId, redirectUri } = req.body;
+
+    if (!accountId || !shopId) {
+        return res.status(400).json({ error: 'Account ID and Shop ID are required' });
+    }
 
     try {
         // Store the accountId temporarily with an expiration
-        const tempKey = `stripe_${accountId}`;
-        await db.collection('temp_stripe_data').doc(tempKey).set({
-            shopId,
-            accountId,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            expires: new Date(Date.now() + 3600000) // 1 hour expiration
-        });
+        await supabase
+            .from('temp_stripe_data')
+            .insert({
+                id: `stripe_${accountId}`,
+                shop_id: shopId,
+                account_id: accountId,
+                created_at: new Date().toISOString(),
+                expires_at: new Date(Date.now() + 3600000).toISOString() // 1 hour expiration
+            });
+
+        // Determine the return and refresh URLs
+        let return_url, refresh_url;
+
+        // Stripe requires HTTPS URLs for their API
+        // We'll use our backend URLs and then redirect to the app
+        console.log('Using backend URLs for Stripe');
+
+        // Store the original redirectUri in the database for later use
+        if (redirectUri) {
+            console.log('Original redirectUri (will be used after Stripe redirect):', redirectUri);
+            // Update the temp_stripe_data record with the redirectUri
+            await supabase
+                .from('temp_stripe_data')
+                .update({ redirect_uri: redirectUri })
+                .eq('id', `stripe_${accountId}`);
+        }
+
+        // Use the backend URLs that Stripe will accept
+        // These should be HTTPS URLs pointing to your deployed backend
+        const baseUrl = process.env.NODE_ENV === 'production'
+            ? process.env.BACKEND_URL || 'https://firstsips-backend.herokuapp.com'
+            : 'http://localhost:5000';
+
+        return_url = `${baseUrl}/stripe/return?account_id=${accountId}&shop_id=${shopId}`;
+        refresh_url = `${baseUrl}/stripe/refresh?account_id=${accountId}`;
 
         const accountLink = await stripe.accountLinks.create({
             account: accountId,
-            refresh_url: `${process.env.STRIPE_REFRESH_URL}?account_id=${accountId}`,
-            return_url: `${process.env.STRIPE_RETURN_URL}?account_id=${accountId}`,
+            refresh_url,
+            return_url,
             type: 'account_onboarding',
         });
 
@@ -68,70 +99,244 @@ router.post('/create-onboarding-link', async (req, res) => {
 
 // Handle return from Stripe onboarding
 router.get('/return', async (req, res) => {
-    const { account_id } = req.query;
-    
+    const { account_id, shop_id } = req.query;
+    console.log('Return handler called with account_id:', account_id, 'shop_id:', shop_id);
+
     try {
         // Retrieve the temporary data
-        const tempKey = `stripe_${account_id}`;
-        const tempDoc = await db.collection('temp_stripe_data').doc(tempKey).get();
-        
-        if (!tempDoc.exists) {
+        const { data: tempData, error: tempError } = await supabase
+            .from('temp_stripe_data')
+            .select('*')
+            .eq('id', `stripe_${account_id}`)
+            .single();
+
+        if (tempError || !tempData) {
             throw new Error('No temporary data found for this account');
         }
 
-        const tempData = tempDoc.data();
-        const { shopId } = tempData;
+        const shopId = tempData.shop_id;
+        const redirectUri = tempData.redirect_uri;
+        console.log('Found temp data with shopId:', shopId, 'redirectUri:', redirectUri);
 
         // Check the account status
         const account = await stripe.accounts.retrieve(account_id);
+        console.log('Retrieved Stripe account:', account_id);
 
         // Update shop's Stripe status
-        await db.collection('shops').doc(shopId).update({
-            stripeAccountId: account_id,
-            stripeEnabled: account.charges_enabled,
-            payoutsEnabled: account.payouts_enabled,
-            detailsSubmitted: account.details_submitted,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+        await supabase
+            .from('shops')
+            .update({
+                stripe_account_id: account_id,
+                stripe_enabled: account.charges_enabled,
+                payouts_enabled: account.payouts_enabled,
+                details_submitted: account.details_submitted,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', shopId);
+        console.log('Updated shop record with Stripe account ID');
 
         // Clean up temporary data
-        await db.collection('temp_stripe_data').doc(tempKey).delete();
+        await supabase
+            .from('temp_stripe_data')
+            .delete()
+            .eq('id', `stripe_${account_id}`);
+        console.log('Cleaned up temporary data');
 
-        // Redirect to the app with success status
-        const redirectUrl = encodeURI(`firstsips://stripe-success?shop_id=${shopId}`);
+        // Redirect to our HTML page that will handle the redirect back to the app
+        const baseUrl = process.env.NODE_ENV === 'production'
+            ? process.env.BACKEND_URL || 'https://firstsips-backend.herokuapp.com'
+            : 'http://localhost:5000';
+
+        const redirectUrl = `${baseUrl}/redirect.html?success=true&account_id=${account_id}&shop_id=${shopId}&stripe_enabled=${account.charges_enabled}&payouts_enabled=${account.payouts_enabled}&details_submitted=${account.details_submitted}`;
+        console.log('Redirecting to HTML redirect page:', redirectUrl);
         res.redirect(redirectUrl);
     } catch (error) {
         console.error('Return handler error:', error);
-        const errorUrl = encodeURI('firstsips://stripe-error');
+
+        // Redirect to our HTML page with error information
+        const baseUrl = process.env.NODE_ENV === 'production'
+            ? process.env.BACKEND_URL || 'https://firstsips-backend.herokuapp.com'
+            : 'http://localhost:5000';
+
+        const errorUrl = `${baseUrl}/redirect.html?success=false&error=${encodeURIComponent(error.message)}`;
+        console.log('Redirecting to HTML error page:', errorUrl);
         res.redirect(errorUrl);
+    }
+});
+
+// API endpoint to update Stripe account status
+// This is used by the WebBrowser flow to check account status
+router.get('/account-status/:accountId', async (req, res) => {
+    const { accountId } = req.params;
+
+    try {
+        // Retrieve the temporary data
+        const { data: tempData, error: tempError } = await supabase
+            .from('temp_stripe_data')
+            .select('*')
+            .eq('id', `stripe_${accountId}`)
+            .single();
+
+        if (tempError || !tempData) {
+            return res.status(404).json({ error: 'No temporary data found for this account' });
+        }
+
+        const shopId = tempData.shop_id;
+
+        // Check the account status
+        const account = await stripe.accounts.retrieve(accountId);
+
+        // Update shop's Stripe status
+        await supabase
+            .from('shops')
+            .update({
+                stripe_account_id: accountId,
+                stripe_enabled: account.charges_enabled,
+                payouts_enabled: account.payouts_enabled,
+                details_submitted: account.details_submitted,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', shopId);
+
+        // Clean up temporary data
+        await supabase
+            .from('temp_stripe_data')
+            .delete()
+            .eq('id', `stripe_${accountId}`);
+
+        // Return success response
+        res.json({
+            success: true,
+            shopId,
+            accountId,
+            charges_enabled: account.charges_enabled,
+            payouts_enabled: account.payouts_enabled,
+            details_submitted: account.details_submitted
+        });
+    } catch (error) {
+        console.error('Account status check error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// API endpoint to check a shop's Stripe status
+router.get('/shop-stripe-status/:shopId', async (req, res) => {
+    const { shopId } = req.params;
+    console.log('Checking Stripe status for shop:', shopId);
+
+    try {
+        // Get the shop record
+        const { data: shopData, error: shopError } = await supabase
+            .from('shops')
+            .select('stripe_account_id, stripe_enabled, payouts_enabled, details_submitted')
+            .eq('id', shopId)
+            .single();
+
+        if (shopError || !shopData) {
+            return res.status(404).json({ error: 'Shop not found' });
+        }
+
+        // If the shop has a Stripe account ID, check its status
+        if (shopData.stripe_account_id) {
+            try {
+                // Get the latest account status from Stripe
+                const account = await stripe.accounts.retrieve(shopData.stripe_account_id);
+
+                // Update the shop record with the latest status
+                await supabase
+                    .from('shops')
+                    .update({
+                        stripe_enabled: account.charges_enabled,
+                        payouts_enabled: account.payouts_enabled,
+                        details_submitted: account.details_submitted,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', shopId);
+
+                // Return the updated status
+                return res.json({
+                    success: true,
+                    shopId,
+                    accountId: shopData.stripe_account_id,
+                    stripeEnabled: account.charges_enabled,
+                    payoutsEnabled: account.payouts_enabled,
+                    detailsSubmitted: account.details_submitted
+                });
+            } catch (stripeError) {
+                console.error('Error retrieving Stripe account:', stripeError);
+                // Return the status from the database if we can't get it from Stripe
+                return res.json({
+                    success: true,
+                    shopId,
+                    accountId: shopData.stripe_account_id,
+                    stripeEnabled: shopData.stripe_enabled,
+                    payoutsEnabled: shopData.payouts_enabled,
+                    detailsSubmitted: shopData.details_submitted,
+                    fromDatabase: true
+                });
+            }
+        } else {
+            // Shop doesn't have a Stripe account yet
+            return res.json({
+                success: false,
+                shopId,
+                stripeConnected: false,
+                message: 'Shop does not have a Stripe account connected'
+            });
+        }
+    } catch (error) {
+        console.error('Shop Stripe status check error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
 // Handle refresh/retry of Stripe onboarding
 router.get('/refresh', async (req, res) => {
     const { account_id } = req.query;
-    
+    console.log('Refresh handler called with account_id:', account_id);
+
     try {
         // Retrieve the temporary data
-        const tempKey = `stripe_${account_id}`;
-        const tempDoc = await db.collection('temp_stripe_data').doc(tempKey).get();
-        
-        if (!tempDoc.exists) {
+        const { data: tempData, error: tempError } = await supabase
+            .from('temp_stripe_data')
+            .select('*')
+            .eq('id', `stripe_${account_id}`)
+            .single();
+
+        if (tempError || !tempData) {
             throw new Error('No temporary data found for this account');
         }
+
+        const shopId = tempData.shop_id;
+        const redirectUri = tempData.redirect_uri;
+        console.log('Found temp data with shopId:', shopId, 'redirectUri:', redirectUri);
+
+        // Use the backend URLs that Stripe will accept
+        const baseUrl = process.env.NODE_ENV === 'production'
+            ? process.env.BACKEND_URL || 'https://firstsips-backend.herokuapp.com'
+            : 'http://localhost:5000';
 
         // Create a new onboarding link
         const accountLink = await stripe.accountLinks.create({
             account: account_id,
-            refresh_url: `${process.env.STRIPE_REFRESH_URL}?account_id=${account_id}`,
-            return_url: `${process.env.STRIPE_RETURN_URL}?account_id=${account_id}`,
+            refresh_url: `${baseUrl}/stripe/refresh?account_id=${account_id}`,
+            return_url: `${baseUrl}/stripe/return?account_id=${account_id}&shop_id=${shopId}`,
             type: 'account_onboarding',
         });
 
+        console.log('Created new onboarding link, redirecting to Stripe');
         res.redirect(accountLink.url);
     } catch (error) {
         console.error('Refresh handler error:', error);
-        res.redirect('firstsips://stripe-error');
+
+        // Redirect to our HTML page with error information
+        const baseUrl = process.env.NODE_ENV === 'production'
+            ? process.env.BACKEND_URL || 'https://firstsips-backend.herokuapp.com'
+            : 'http://localhost:5000';
+
+        const errorUrl = `${baseUrl}/redirect.html?success=false&error=${encodeURIComponent(error.message)}`;
+        console.log('Redirecting to HTML error page:', errorUrl);
+        res.redirect(errorUrl);
     }
 });
 
@@ -166,12 +371,19 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
             const shopId = account.metadata.shopId;
 
             if (shopId) {
-                await db.collection('shops').doc(shopId).update({
-                    stripeEnabled: account.charges_enabled,
-                    payoutsEnabled: account.payouts_enabled,
-                    detailsSubmitted: account.details_submitted,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
+                const { error: updateError } = await supabase
+                    .from('shops')
+                    .update({
+                        stripe_enabled: account.charges_enabled,
+                        payouts_enabled: account.payouts_enabled,
+                        details_submitted: account.details_submitted,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', shopId);
+
+                if (updateError) {
+                    console.error('Error updating shop:', updateError);
+                }
             }
         }
 
