@@ -30,49 +30,58 @@ router.post('/create-account', async (req, res) => {
             }
         });
 
+        console.log('Returning account ID to client:', account.id);
         res.json({ accountId: account.id });
     } catch (error) {
         console.error('Create account error:', error);
+        console.error('Error details:', error.message);
+        if (error.type) {
+            console.error('Stripe error type:', error.type);
+        }
+        if (error.raw) {
+            console.error('Stripe raw error:', error.raw);
+        }
         res.status(400).json({ error: error.message });
     }
 });
 
 // Route to generate an onboarding link
 router.post('/create-onboarding-link', async (req, res) => {
+    console.log('=== CREATE ONBOARDING LINK ENDPOINT CALLED ===');
+    console.log('Request body:', req.body);
     const { accountId, shopId, redirectUri } = req.body;
+    console.log('Account ID:', accountId);
+    console.log('Shop ID:', shopId);
+    console.log('Redirect URI:', redirectUri);
 
     if (!accountId || !shopId) {
+        console.error('Missing required parameters: accountId or shopId');
         return res.status(400).json({ error: 'Account ID and Shop ID are required' });
     }
 
     try {
+        console.log('Storing temporary data in Supabase');
         // Store the accountId temporarily with an expiration
-        await supabase
+        const { error: insertError } = await supabase
             .from('temp_stripe_data')
             .insert({
                 id: `stripe_${accountId}`,
                 shop_id: shopId,
                 account_id: accountId,
+                redirect_uri: redirectUri,
                 created_at: new Date().toISOString(),
                 expires_at: new Date(Date.now() + 3600000).toISOString() // 1 hour expiration
             });
 
-        // Determine the return and refresh URLs
-        let return_url, refresh_url;
+        if (insertError) {
+            console.error('Error storing temp data in Supabase:', insertError);
+            throw new Error(`Failed to store temporary data: ${insertError.message}`);
+        }
+        console.log('Temporary data stored successfully');
 
         // Stripe requires HTTPS URLs for their API
         // We'll use our backend URLs and then redirect to the app
         console.log('Using backend URLs for Stripe');
-
-        // Store the original redirectUri in the database for later use
-        if (redirectUri) {
-            console.log('Original redirectUri (will be used after Stripe redirect):', redirectUri);
-            // Update the temp_stripe_data record with the redirectUri
-            await supabase
-                .from('temp_stripe_data')
-                .update({ redirect_uri: redirectUri })
-                .eq('id', `stripe_${accountId}`);
-        }
 
         // Use the backend URLs that Stripe will accept
         // These should be HTTPS URLs pointing to your deployed backend
@@ -80,9 +89,13 @@ router.post('/create-onboarding-link', async (req, res) => {
             ? process.env.BACKEND_URL || 'https://firstsips-backend.herokuapp.com'
             : 'http://localhost:5000';
 
-        return_url = `${baseUrl}/stripe/return?account_id=${accountId}&shop_id=${shopId}`;
-        refresh_url = `${baseUrl}/stripe/refresh?account_id=${accountId}`;
+        const return_url = `${baseUrl}/stripe/return?account_id=${accountId}&shop_id=${shopId}`;
+        const refresh_url = `${baseUrl}/stripe/refresh?account_id=${accountId}`;
 
+        console.log('Return URL for Stripe:', return_url);
+        console.log('Refresh URL for Stripe:', refresh_url);
+
+        console.log('Creating Stripe account link...');
         const accountLink = await stripe.accountLinks.create({
             account: accountId,
             refresh_url,
@@ -90,19 +103,32 @@ router.post('/create-onboarding-link', async (req, res) => {
             type: 'account_onboarding',
         });
 
+        console.log('Stripe account link created successfully');
+        console.log('Onboarding URL:', accountLink.url);
+
         res.json({ url: accountLink.url });
     } catch (error) {
         console.error('Create onboarding link error:', error);
+        console.error('Error details:', error.message);
+        if (error.type) {
+            console.error('Stripe error type:', error.type);
+        }
+        if (error.raw) {
+            console.error('Stripe raw error:', error.raw);
+        }
         res.status(400).json({ error: error.message });
     }
 });
 
 // Handle return from Stripe onboarding
 router.get('/return', async (req, res) => {
+    console.log('=== RETURN ENDPOINT CALLED ===');
+    console.log('Query parameters:', req.query);
     const { account_id, shop_id } = req.query;
     console.log('Return handler called with account_id:', account_id, 'shop_id:', shop_id);
 
     try {
+        console.log('Retrieving temporary data from Supabase...');
         // Retrieve the temporary data
         const { data: tempData, error: tempError } = await supabase
             .from('temp_stripe_data')
@@ -110,57 +136,129 @@ router.get('/return', async (req, res) => {
             .eq('id', `stripe_${account_id}`)
             .single();
 
-        if (tempError || !tempData) {
+        if (tempError) {
+            console.error('Error retrieving temporary data:', tempError);
+            throw new Error(`Failed to retrieve temporary data: ${tempError.message}`);
+        }
+
+        if (!tempData) {
+            console.error('No temporary data found for account ID:', account_id);
             throw new Error('No temporary data found for this account');
         }
 
-        const shopId = tempData.shop_id;
-        const redirectUri = tempData.redirect_uri;
-        console.log('Found temp data with shopId:', shopId, 'redirectUri:', redirectUri);
+        console.log('Retrieved temporary data:', tempData);
 
+        const shopId = tempData.shop_id;
+        console.log('Found temp data with shopId:', shopId);
+
+        console.log('Retrieving Stripe account details...');
         // Check the account status
         const account = await stripe.accounts.retrieve(account_id);
         console.log('Retrieved Stripe account:', account_id);
+        console.log('Account details:', {
+            id: account.id,
+            email: account.email,
+            charges_enabled: account.charges_enabled,
+            payouts_enabled: account.payouts_enabled,
+            details_submitted: account.details_submitted,
+            business_type: account.business_type,
+            country: account.country
+        });
 
-        // Update shop's Stripe status
-        await supabase
+        // Log detailed account information for debugging
+        console.log('Stripe account details:', {
+            charges_enabled: account.charges_enabled,
+            payouts_enabled: account.payouts_enabled,
+            details_submitted: account.details_submitted,
+            requirements: account.requirements,
+            capabilities: account.capabilities
+        });
+
+        // Update shop's Stripe status with all relevant information
+        const { error: updateError } = await supabase
             .from('shops')
             .update({
                 stripe_account_id: account_id,
                 stripe_enabled: account.charges_enabled,
                 payouts_enabled: account.payouts_enabled,
                 details_submitted: account.details_submitted,
+                stripe_requirements: account.requirements ? JSON.stringify(account.requirements) : null,
+                stripe_capabilities: account.capabilities ? JSON.stringify(account.capabilities) : null,
+                stripe_connected: true,
                 updated_at: new Date().toISOString()
             })
             .eq('id', shopId);
-        console.log('Updated shop record with Stripe account ID');
+
+        if (updateError) {
+            console.error('Error updating shop record:', updateError);
+            throw new Error(`Failed to update shop record: ${updateError.message}`);
+        }
+
+        console.log('Successfully updated shop record with Stripe account information');
 
         // Clean up temporary data
-        await supabase
+        const { error: deleteError } = await supabase
             .from('temp_stripe_data')
             .delete()
             .eq('id', `stripe_${account_id}`);
-        console.log('Cleaned up temporary data');
 
-        // Redirect to our HTML page that will handle the redirect back to the app
-        const baseUrl = process.env.NODE_ENV === 'production'
-            ? process.env.BACKEND_URL || 'https://firstsips-backend.herokuapp.com'
-            : 'http://localhost:5000';
+        if (deleteError) {
+            console.error('Error cleaning up temporary data:', deleteError);
+            // Continue even if cleanup fails
+        } else {
+            console.log('Cleaned up temporary data');
+        }
 
-        const redirectUrl = `${baseUrl}/redirect.html?success=true&account_id=${account_id}&shop_id=${shopId}&stripe_enabled=${account.charges_enabled}&payouts_enabled=${account.payouts_enabled}&details_submitted=${account.details_submitted}`;
-        console.log('Redirecting to HTML redirect page:', redirectUrl);
-        res.redirect(redirectUrl);
+        // Just display a simple success page
+        res.send(`
+            <html>
+            <head>
+                <title>Stripe Setup Complete</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                    .success { color: green; }
+                    .container { max-width: 600px; margin: 0 auto; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1 class="success">Stripe Setup Complete!</h1>
+                    <p>Your Stripe account has been successfully connected to FirstSips.</p>
+                    <p>You can now close this window and return to the app.</p>
+                    <div>
+                        <h3>Account Status:</h3>
+                        <p>Charges Enabled: ${account.charges_enabled ? 'Yes' : 'No'}</p>
+                        <p>Payouts Enabled: ${account.payouts_enabled ? 'Yes' : 'No'}</p>
+                        <p>Details Submitted: ${account.details_submitted ? 'Yes' : 'No'}</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `);
     } catch (error) {
         console.error('Return handler error:', error);
 
-        // Redirect to our HTML page with error information
-        const baseUrl = process.env.NODE_ENV === 'production'
-            ? process.env.BACKEND_URL || 'https://firstsips-backend.herokuapp.com'
-            : 'http://localhost:5000';
-
-        const errorUrl = `${baseUrl}/redirect.html?success=false&error=${encodeURIComponent(error.message)}`;
-        console.log('Redirecting to HTML error page:', errorUrl);
-        res.redirect(errorUrl);
+        // Just display a simple error page
+        res.status(500).send(`
+            <html>
+            <head>
+                <title>Stripe Setup Error</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                    .error { color: red; }
+                    .container { max-width: 600px; margin: 0 auto; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1 class="error">Stripe Setup Error</h1>
+                    <p>There was a problem connecting your Stripe account:</p>
+                    <p><strong>${error.message}</strong></p>
+                    <p>You can close this window and try again from the app.</p>
+                </div>
+            </body>
+            </html>
+        `);
     }
 });
 
@@ -329,14 +427,27 @@ router.get('/refresh', async (req, res) => {
     } catch (error) {
         console.error('Refresh handler error:', error);
 
-        // Redirect to our HTML page with error information
-        const baseUrl = process.env.NODE_ENV === 'production'
-            ? process.env.BACKEND_URL || 'https://firstsips-backend.herokuapp.com'
-            : 'http://localhost:5000';
-
-        const errorUrl = `${baseUrl}/redirect.html?success=false&error=${encodeURIComponent(error.message)}`;
-        console.log('Redirecting to HTML error page:', errorUrl);
-        res.redirect(errorUrl);
+        // Display a simple error page
+        res.status(500).send(`
+            <html>
+            <head>
+                <title>Stripe Setup Error</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                    .error { color: red; }
+                    .container { max-width: 600px; margin: 0 auto; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1 class="error">Stripe Setup Error</h1>
+                    <p>There was a problem refreshing your Stripe onboarding:</p>
+                    <p><strong>${error.message}</strong></p>
+                    <p>You can close this window and try again from the app.</p>
+                </div>
+            </body>
+            </html>
+        `);
     }
 });
 
