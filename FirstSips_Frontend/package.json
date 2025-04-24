@@ -7,9 +7,12 @@
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
+    "web": "node ./scripts/fix-platform-import.js && node ./scripts/fix-jimp-error.js && expo start --web",
     "test": "jest --watchAll",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "fix-platform-import": "node ./scripts/fix-platform-import.js",
+    "fix-jimp-error": "node ./scripts/fix-jimp-error.js",
+    "fix-all": "npm run fix-platform-import && npm run fix-jimp-error"
   },
   "jest": {
     "preset": "jest-expo"
