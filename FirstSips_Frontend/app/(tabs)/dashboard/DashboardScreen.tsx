@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
-import ShopCard from '../../components/ShopCard';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, SafeAreaView } from 'react-native';
+import ShopCard from '../../components/ShopCard'; // Assuming ShopCard component exists
 import { useRouter } from 'expo-router';
 import { Menu, IconButton } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,9 +9,11 @@ import { supabase } from "../../utils/supabase";
 
 interface Shop {
     id: string;
-    shopName: string;
+    shopName: string; // Renamed from shop_name for consistency
     profileImage?: string;
     status: boolean;
+    address?: string; // Added address for ShopCard
+    description?: string; // Added description for ShopCard
     [key: string]: any;
 }
 
@@ -24,30 +26,17 @@ const DashboardScreen = () => {
     const [hasShop, setHasShop] = useState<boolean>(false);
     const router = useRouter();
 
-    // Check if user has a shop
-    const checkUserShop = async () => {
+    const checkUserShop = useCallback(async () => {
         try {
             const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-            if (!user || authError) {
-                console.error('Auth error:', authError);
-                return;
-            }
-
+            if (!user || authError) { console.error('Auth error:', authError); return; }
             const userId = user.id;
-
-            // Query the users table to check if the user has a shop
             const { data: userData, error: userError } = await supabase
                 .from('users')
                 .select('shop_id')
                 .eq('id', userId)
                 .single();
-
-            if (userError) {
-                console.error('Error fetching user data:', userError);
-                return;
-            }
-
+            if (userError) { console.error('Error fetching user data:', userError); return; }
             if (userData && userData.shop_id) {
                 setUserShopId(userData.shop_id);
                 setHasShop(true);
@@ -55,42 +44,32 @@ const DashboardScreen = () => {
                 setUserShopId(null);
                 setHasShop(false);
             }
-        } catch (error) {
-            console.error('Error checking user shop:', error);
-        }
-    };
+        } catch (error) { console.error('Error checking user shop:', error); }
+    }, []);
 
-    const fetchShops = async () => {
+    const fetchShops = useCallback(async () => {
         try {
             await checkUserShop();
-
-            // Fetch all shops from Supabase
             const { data: shopsData, error: shopsError } = await supabase
                 .from('shops')
                 .select('*');
-
-            if (shopsError) {
-                console.error('Error fetching shops:', shopsError);
-                return;
-            }
+            if (shopsError) { console.error('Error fetching shops:', shopsError); return; }
 
             const openShopsList: Shop[] = [];
             const closedShopsList: Shop[] = [];
 
-            // Process the shops data
             shopsData.forEach((shop) => {
-                // Convert the Supabase shop data to match your Shop interface
+                // Skip user's own shop
+                if (shop.id === userShopId) return;
+
                 const shopData: Shop = {
                     id: shop.id,
-                    shopName: shop.shop_name,
-                    address: shop.street_address,
+                    shopName: shop.shop_name, // Map from DB field
+                    address: shop.street_address, // Map from DB field
                     profileImage: shop.profile_image,
                     status: shop.status,
                     description: shop.description,
                 };
-
-                console.log(shopData.id, userShopId);
-                if (shopData.id === userShopId) return;
 
                 if (shopData.status) {
                     openShopsList.push(shopData);
@@ -101,22 +80,21 @@ const DashboardScreen = () => {
 
             setOpenShops(openShopsList);
             setClosedShops(closedShopsList);
-        } catch (error) {
-            console.error('Error fetching shops:', error);
-        }
-    };
+        } catch (error) { console.error('Error fetching shops:', error); }
+    }, [userShopId, checkUserShop]); // Depend on userShopId and checkUserShop
 
-    const onRefresh = async () => {
+    const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await fetchShops();
         setRefreshing(false);
-    };
+    }, [fetchShops]); // Depend on fetchShops
 
     useEffect(() => {
         fetchShops();
-    }, []);
+    }, [fetchShops]); // Fetch shops when the component mounts or fetchShops changes
 
     const handleShopAction = () => {
+        setMenuVisible(false);
         if (hasShop) {
             router.push("../shop_owner/EditShopScreen");
         } else {
@@ -125,150 +103,170 @@ const DashboardScreen = () => {
     };
 
     const handleOrderHistory = () => {
+        setMenuVisible(false);
         router.push('/(tabs)/shop_front/OrderHistoryScreen');
     };
 
     const handleSignOut = async () => {
+        setMenuVisible(false);
         try {
             const { error } = await signOut();
-            if (error) {
-                console.log('Sign out error:', error);
-                return;
-            }
+            if (error) { console.log('Sign out error:', error); return; }
             router.replace('../../(public)/LandingScreen');
-        } catch (error) {
-            console.log('Unexpected error during sign out:', error);
-        }
+        } catch (error) { console.log('Unexpected error during sign out:', error); }
     };
 
     return (
-        <ScrollView
-            style={styles.container}
-            refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-        >
-            <View style={styles.headerContainer}>
-                <Text style={styles.header}>FirstSips</Text>
-                <Menu
-                    visible={menuVisible}
-                    onDismiss={() => setMenuVisible(false)}
-                    anchor={
-                        <IconButton
-                            icon={({ size }) => (
-                                <Ionicons name="menu" size={size} color="#6F4E37" />
-                            )}
-                            size={24}
-                            onPress={() => setMenuVisible(true)}
-                            style={styles.menuButton}
+        <SafeAreaView style={styles.safeArea}>
+            <ScrollView
+                style={styles.container}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#6F4E37"]} tintColor={"#6F4E37"}/>
+                }
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Header */}
+                <View style={styles.headerContainer}>
+                    <Text style={styles.header}>FirstSips</Text>
+                    <Menu
+                        visible={menuVisible}
+                        onDismiss={() => setMenuVisible(false)}
+                        anchor={
+                            <IconButton
+                                icon={({ size }) => (
+                                    <Ionicons name="menu" size={size} color="#555555" /> // Consistent icon color
+                                )}
+                                size={28} // Slightly larger icon
+                                onPress={() => setMenuVisible(true)}
+                                style={styles.menuButton}
+                            />
+                        }
+                        contentStyle={styles.menuContent} // Style the menu dropdown
+                    >
+                        <Menu.Item
+                            onPress={handleShopAction}
+                            title={hasShop ? "Edit Shop" : "Create Shop"}
+                            leadingIcon={hasShop ? "store-edit-outline" : "store-plus-outline"} // Material Community Icons
+                            titleStyle={styles.menuItemTitle}
                         />
-                    }
-                >
-                    <Menu.Item
-                        onPress={() => {
-                            setMenuVisible(false);
-                            handleShopAction();
-                        }}
-                        title={hasShop ? "Edit Shop" : "Create Shop"}
-                        leadingIcon={hasShop ? "pencil" : "plus"}
-                    />
-                    <Menu.Item
-                        onPress={() => {
-                            setMenuVisible(false);
-                            handleOrderHistory();
-                        }}
-                        title="Order History"
-                        leadingIcon="history"
-                    />
-                    <Menu.Item
-                        onPress={() => {
-                            setMenuVisible(false);
-                            handleSignOut();
-                        }}
-                        title="Sign Out"
-                        leadingIcon="logout"
-                    />
-                </Menu>
-            </View>
-            {/* Open Shops Section */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Open Shops</Text>
-                {openShops.length === 0 ? (
-                    <Text style={styles.emptyText}>No open shops available</Text>
-                ) : (
-                    openShops.map((shop) => (
-                        <ShopCard
-                            key={shop.id}
-                            shop={shop}
-                            onPress={() => router.push({
-                                pathname: "/(tabs)/shop_front/OpenedShopScreen",
-                                params: { shopId: shop.id }
-                            })}
+                        <Menu.Item
+                            onPress={handleOrderHistory}
+                            title="Order History"
+                            leadingIcon="history"
+                            titleStyle={styles.menuItemTitle}
                         />
-                    ))
-                )}
-            </View>
+                        <Menu.Item
+                            onPress={handleSignOut}
+                            title="Sign Out"
+                            leadingIcon="logout"
+                            titleStyle={styles.menuItemTitle}
+                        />
+                    </Menu>
+                </View>
 
-            {/* Closed Shops Section */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Closed Shops</Text>
-                {closedShops.length === 0 ? (
-                    <Text style={styles.emptyText}>No closed shops</Text>
-                ) : (
-                    closedShops.map((shop) => (
-                        <ShopCard
-                            key={shop.id}
-                            shop={shop}
-                            onPress={() => router.push({
-                                pathname: "/(tabs)/shop_front/ClosedShopScreen",
-                                params: { shopId: shop.id }
-                            })}
-                        />
-                    ))
-                )}
-            </View>
-        </ScrollView>
+                {/* Open Shops Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Open Now</Text>
+                    {openShops.length === 0 && !refreshing ? (
+                        <Text style={styles.emptyText}>No shops currently open.</Text>
+                    ) : (
+                        openShops.map((shop) => (
+                            <ShopCard
+                                key={shop.id}
+                                shop={shop}
+                                onPress={() => router.push({
+                                    pathname: "/(tabs)/shop_front/OpenedShopScreen",
+                                    params: { shopId: shop.id }
+                                })}
+                                style={styles.shopCard} // Apply card styling
+                            />
+                        ))
+                    )}
+                </View>
+
+                {/* Closed Shops Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Currently Closed</Text>
+                    {closedShops.length === 0 && !refreshing ? (
+                        <Text style={styles.emptyText}>No closed shops found.</Text>
+                    ) : (
+                        closedShops.map((shop) => (
+                            <ShopCard
+                                key={shop.id}
+                                shop={shop}
+                                onPress={() => router.push({
+                                    pathname: "/(tabs)/shop_front/ClosedShopScreen",
+                                    params: { shopId: shop.id }
+                                })}
+                                style={styles.shopCard} // Apply card styling
+                            />
+                        ))
+                    )}
+                </View>
+            </ScrollView>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#FFFFFF', // White background
+    },
     container: {
         flex: 1,
-        backgroundColor: '#F5EDD8',
-        width: "100%",
+        backgroundColor: '#FFFFFF', // White background
     },
     headerContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        marginTop: 40,
-        marginBottom: 20,
+        paddingHorizontal: 20, // Increased padding
+        paddingTop: 10, // Adjusted top padding
+        paddingBottom: 10, // Added bottom padding
+        borderBottomWidth: 1, // Subtle separator
+        borderBottomColor: '#EEEEEE', // Light grey separator
     },
     header: {
-        fontSize: 32,
+        fontSize: 28, // Slightly smaller header
         fontWeight: 'bold',
-        color: '#D4A373',
-        fontFamily: 'System',
-        letterSpacing: 0.5,
+        color: '#333333', // Dark grey header text
     },
     menuButton: {
-        margin: 0,
+        margin: 0, // Remove default margin
+    },
+    menuContent: {
+        backgroundColor: '#FFFFFF', // White background for menu
+        borderRadius: 8,
+    },
+    menuItemTitle: {
+        color: '#333333', // Dark text for menu items
     },
     section: {
-        padding: 16,
-        width: "100%",
+        paddingHorizontal: 20, // Consistent horizontal padding
+        paddingVertical: 16, // Vertical padding for sections
     },
     sectionTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
+        fontSize: 20, // Slightly larger section title
+        fontWeight: '600', // Semi-bold
         marginBottom: 16,
-        color: '#6F4E37',
+        color: '#333333', // Dark grey title
+    },
+    shopCard: { // Basic styling for ShopCard (can be moved to ShopCard component)
+        marginBottom: 16,
+        borderRadius: 12,
+        backgroundColor: '#FFFFFF', // Ensure card background is white
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.15, // Softer shadow
+        shadowRadius: 2.22,
     },
     emptyText: {
         textAlign: 'center',
-        color: '#666666',
-        marginTop: 8,
+        color: '#888888', // Lighter grey for empty text
+        marginTop: 16,
+        fontSize: 16,
     },
 });
 

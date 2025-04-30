@@ -288,23 +288,6 @@ router.get('/refresh', async (req, res) => {
     }
 });
 
-// API endpoint to check account status - COMMENTED OUT as it seems redundant with /return
-/*
-router.get('/check-account-status/:accountId', async (req, res) => {
-    try {
-        const account = await stripe.accounts.retrieve(req.params.accountId);
-        res.json({
-            chargesEnabled: account.charges_enabled,
-            payoutsEnabled: account.payouts_enabled,
-            detailsSubmitted: account.details_submitted
-        });
-    } catch (error) {
-        console.error('Check account status error:', error);
-        res.status(400).json({ error: error.message });
-    }
-});
-*/
-
 // API endpoint to check a shop's Stripe status (useful for the app to query)
 router.get('/shop-stripe-status/:shopId', async (req, res) => {
     const { shopId } = req.params;
@@ -447,19 +430,10 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
                 console.warn('Account updated event received, but no shopId found in metadata for account:', account.id);
             }
             break;
-        // Handle other event types as needed
-        // case 'payment_intent.succeeded':
-        //     // Handle successful payments
-        //     break;
-        // case 'transfer.created':
-        //     // Handle transfers
-        //     break;
         default:
-            // Unexpected event type
             console.log(`Unhandled event type ${event.type}`);
     }
 
-    // Return a 200 response to acknowledge receipt of the event
     res.json({ received: true });
 });
 

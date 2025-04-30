@@ -6,41 +6,41 @@ export default function Landing() {
   const router = useRouter();
 
   return (
-    // SafeAreaView helps handle notches and status bars
+    // Use a clean white background for the SafeAreaView
     <SafeAreaView style={styles.safeArea}>
-      {/* Main container with background color */}
+      {/* Main container */}
       <View style={styles.container}>
-        {/* Top section for the image */}
-        <View style={styles.topContainer}>
+        {/* Top section for the image - give it more defined space */}
+        <View style={styles.imageContainer}>
           <Image
             source={require('../assets/images/first_sips_coffee.png')} // Ensure this image exists
             style={styles.coffeeImage}
-            resizeMode="contain" // Use 'contain' to prevent distortion
+            resizeMode="contain"
           />
         </View>
 
         {/* Bottom section for the welcome text and buttons */}
-        <View style={styles.bottomContainer}>
-          {/* White background card */}
-          <View style={styles.whiteBackground}>
-            <Text style={styles.welcomeText}>Welcome!</Text>
+        <View style={styles.contentContainer}>
+          <Text style={styles.welcomeText}>Welcome to FirstSips!</Text>
+          <Text style={styles.subtitleText}>Your local coffee fix, delivered.</Text>
 
-            {/* Login Button */}
-            <ScreenWideButton
-              text="Login"
-              onPress={() => router.push("../(auth)/LoginScreen")}
-              color="#D4A373" // Warm, inviting color
-              textColor="#FFFFFF" // White text for contrast
-            />
+          {/* Login Button (Primary Action) */}
+          <ScreenWideButton
+            text="Login"
+            onPress={() => router.push("../(auth)/LoginScreen")}
+            color="#6F4E37" // Using the darker brown as primary accent
+            textColor="#FFFFFF"
+            style={styles.primaryButton} // Add specific styles
+          />
 
-            {/* Create Account Button */}
-            <ScreenWideButton
-              text="Create an account"
-              onPress={() => router.push("../(auth)/AccountTypeScreen")}
-              color="#F5EDD8" // Lighter background color
-              textColor="#000000" // Dark text for contrast
-            />
-          </View>
+          {/* Create Account Button (Secondary Action) */}
+          <ScreenWideButton
+            text="Create an account"
+            onPress={() => router.push("../(auth)/AccountTypeScreen")}
+            color="#FFFFFF" // White background for outlined effect
+            textColor="#6F4E37" // Use accent color for text
+            style={styles.secondaryButton} // Add specific styles
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -50,43 +50,57 @@ export default function Landing() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F5EDD8", // Background color for the whole screen
+    backgroundColor: "#FFFFFF", // Clean white background
   },
   container: {
     flex: 1,
-    backgroundColor: "#F5EDD8", // Background color
-    justifyContent: 'space-between', // Distribute space between top and bottom containers
+    justifyContent: 'space-between', // Pushes content to top and bottom
+    paddingHorizontal: 24, // Add horizontal padding to the main container
+    paddingBottom: 40, // Padding at the very bottom
   },
-  topContainer: {
-    flex: 1, // Allow top container to take available space
-    justifyContent: "center", // Center image vertically
-    alignItems: "center", // Center image horizontally
-    paddingTop: 40, // Add some padding at the top
-  },
-  bottomContainer: {
-    justifyContent: "flex-end", // Push content to the bottom of this container
+  imageContainer: {
+    flex: 0.6, // Allocate roughly 60% of the space to the image area
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 40, // Add some space from the top status bar
   },
   coffeeImage: {
-    width: "80%", // Use percentage for responsive width
-    height: "80%", // Use percentage for responsive height
-    // aspectRatio: 1, // Keep aspect ratio if needed, but width/height might be enough
-    // Removed marginTop: 250 - let flexbox handle positioning
+    width: "90%", // Make image slightly larger relative to its container
+    height: "90%",
   },
-  whiteBackground: {
-    backgroundColor: "#FFFFFF", // White background for the card
-    borderTopLeftRadius: 30, // Rounded top corners
-    borderTopRightRadius: 30,
-    width: "100%", // Full width
-    padding: 32, // Consistent padding inside the card
-    gap: 16, // Space between elements inside the card
-    // Removed fixed height - let content define height
-    paddingBottom: 40, // More padding at the bottom for buttons
+  contentContainer: {
+    flex: 0.4, // Allocate roughly 40% to the text and buttons
+    justifyContent: "center", // Center content vertically within this section
+    alignItems: "center", // Center items horizontally
+    gap: 20, // Consistent spacing between elements in this container
   },
   welcomeText: {
-    fontSize: 32, // Slightly larger font size
-    fontWeight: "bold", // Make it bold
-    marginBottom: 24, // More space below the text
-    textAlign: "center", // Center the text
-    color: "#333", // Darker text color for better contrast
+    fontSize: 34, // Slightly larger
+    fontWeight: "bold", // Keep bold
+    textAlign: "center",
+    color: "#333333", // Dark grey for readability
+    marginBottom: 8, // Space below welcome text
+  },
+  subtitleText: {
+    fontSize: 18,
+    textAlign: "center",
+    color: "#555555", // Medium grey
+    marginBottom: 32, // More space before buttons
+  },
+  // Specific styles for buttons to override defaults if needed, or add new ones like borderRadius
+  primaryButton: {
+    borderRadius: 12, // Rounded corners
+    paddingVertical: 14, // Adjust vertical padding for better touch area
+    elevation: 2, // Subtle shadow on Android
+    shadowColor: '#000', // Shadow for iOS
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+  },
+  secondaryButton: {
+    borderRadius: 12, // Consistent rounded corners
+    paddingVertical: 14,
+    borderWidth: 1.5, // Add border for outlined effect
+    borderColor: "#6F4E37", // Use accent color for border
   },
 });

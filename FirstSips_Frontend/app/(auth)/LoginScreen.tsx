@@ -9,147 +9,179 @@ import { signInWithEmail } from "../auth/auth"; // Assuming this auth function e
 const LoginScreen = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [loading, setLoading] = useState(false); // State to manage loading indicator
+    const [loading, setLoading] = useState(false);
+    const [passwordVisible, setPasswordVisible] = useState(false); // State for password visibility
     const router = useRouter();
 
-    // Function to handle sign-in logic
     const handleSignIn = async () => {
-        setLoading(true); // Start loading
-
-        // Call the sign-in function (replace with your actual auth logic)
+        setLoading(true);
         const { data, error } = await signInWithEmail(email, password);
+        setLoading(false); // Stop loading regardless of outcome
 
         if (error) {
-            // Display error message (consider using a more user-friendly modal/toast)
             alert("Login failed: " + error.message);
-            setLoading(false); // Stop loading
             return;
         }
 
-        console.log("Logged in user: ", data); // Log success
-        setLoading(false); // Stop loading
-        router.push("../(tabs)/dashboard/DashboardScreen"); // Navigate on success
+        console.log("Logged in user: ", data);
+        router.replace("../(tabs)/dashboard/DashboardScreen"); // Use replace to prevent going back to login
     };
 
     return (
-        // KeyboardAvoidingView to prevent keyboard from covering inputs
-        <KeyboardAvoidingView
-          style={styles.safeArea} // Apply styles to the main container
-          behavior={Platform.OS === "ios" ? "padding" : "height"} // Adjust behavior based on platform
-          keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0} // Offset for iOS keyboard
-        >
-          {/* ScrollView for content that might exceed screen height */}
-          <ScrollView contentContainerStyle={styles.scrollContainer}>
-            {/* Back Button */}
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-              accessibilityLabel="Go back" // Accessibility label
+        <SafeAreaView style={styles.safeArea}>
+            <KeyboardAvoidingView
+                style={styles.keyboardAvoidingView}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0} // Adjust offset as needed
             >
-              <Ionicons name="arrow-back" size={24} color="#6F4E37" /> {/* Consistent back arrow color */}
-            </TouchableOpacity>
+                <ScrollView
+                    contentContainerStyle={styles.scrollContainer}
+                    keyboardShouldPersistTaps="handled" // Dismiss keyboard on tap outside inputs
+                >
+                    {/* Back Button */}
+                    <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={() => router.back()}
+                        accessibilityLabel="Go back"
+                    >
+                        <Ionicons name="arrow-back" size={24} color="#555555" />
+                    </TouchableOpacity>
 
-            {/* Form Container */}
-            <View style={styles.form}>
-              {/* Title */}
-              <Text style={styles.titleText}>Welcome Back!</Text>
+                    {/* Form Container */}
+                    <View style={styles.form}>
+                        <Text style={styles.titleText}>Welcome Back!</Text>
+                        <Text style={styles.subtitleText}>Log in to continue your coffee journey.</Text>
 
-              {/* Email Input */}
-              <TextInput
-                label="Email"
-                value={email}
-                onChangeText={setEmail}
-                mode="outlined" // Outlined style
-                style={styles.input}
-                autoCapitalize="none" // Prevent auto-capitalization for email
-                keyboardType="email-address" // Suggest email keyboard
-              />
+                        {/* Email Input */}
+                        <TextInput
+                            label="Email"
+                            value={email}
+                            onChangeText={setEmail}
+                            mode="outlined"
+                            style={styles.input}
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                            theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }} // Theme for outline color and background
+                            outlineColor="#CCCCCC" // Softer outline color
+                            activeOutlineColor="#6F4E37" // Accent color when active
+                        />
 
-              {/* Password Input */}
-              <TextInput
-                label="Password"
-                value={password}
-                onChangeText={setPassword}
-                mode="outlined" // Outlined style
-                secureTextEntry // Hide password input
-                style={styles.input}
-              />
+                        {/* Password Input */}
+                        <TextInput
+                            label="Password"
+                            value={password}
+                            onChangeText={setPassword}
+                            mode="outlined"
+                            secureTextEntry={!passwordVisible} // Toggle based on state
+                            style={styles.input}
+                            theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                            outlineColor="#CCCCCC"
+                            activeOutlineColor="#6F4E37"
+                            right={ // Add eye icon to toggle visibility
+                                <TextInput.Icon
+                                    icon={passwordVisible ? "eye-off" : "eye"}
+                                    onPress={() => setPasswordVisible(!passwordVisible)}
+                                    color="#888888" // Icon color
+                                />
+                            }
+                        />
 
-              {/* Loading Indicator or Buttons */}
-              {loading ? (
-                // Show activity indicator when loading
-                <ActivityIndicator size="large" color="#D4A373" style={styles.loadingIndicator} />
-              ) : (
-                // Show buttons when not loading
-                <>
-                  {/* Login Button */}
-                  <ScreenWideButton
-                    text="Login"
-                    onPress={handleSignIn}
-                    color="#D4A373" // Primary color
-                    textColor="#FFFFFF" // White text
-                  />
-                  {/* Spacer */}
-                  <View style={{ height: 16 }} />
-                  {/* Create Account Button */}
-                  <ScreenWideButton
-                    text="Create an account instead"
-                    onPress={() => router.push("./AccountTypeScreen")}
-                    color="#F5EDD8" // Secondary color
-                    textColor="#000000" // Dark text
-                  />
-                </>
-              )}
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+                        {/* Loading Indicator or Buttons */}
+                        {loading ? (
+                            <ActivityIndicator size="large" color="#6F4E37" style={styles.loadingIndicator} />
+                        ) : (
+                            <>
+                                {/* Login Button (Primary) */}
+                                <ScreenWideButton
+                                    text="Login"
+                                    onPress={handleSignIn}
+                                    color="#6F4E37"
+                                    textColor="#FFFFFF"
+                                    style={styles.primaryButton}
+                                    disabled={!email || !password} // Disable if fields are empty
+                                />
+                                {/* Create Account Button (Secondary) */}
+                                <ScreenWideButton
+                                    text="Create an account instead"
+                                    onPress={() => router.push("./AccountTypeScreen")}
+                                    color="#FFFFFF" // Outlined style
+                                    textColor="#6F4E37"
+                                    style={styles.secondaryButton}
+                                />
+                            </>
+                        )}
+                    </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: "#F5EDD8", // Consistent background color
+        backgroundColor: "#FFFFFF", // Clean white background
     },
-    container: {
+    keyboardAvoidingView: {
         flex: 1,
-        backgroundColor: "#F5EDD8", // Consistent background color
     },
     scrollContainer: {
-        flexGrow: 1, // Allow content to grow
-        justifyContent: "center", // Center content vertically
-        paddingHorizontal: 24, // Horizontal padding
-        paddingTop: 80, // Padding at the top to make space for back button
-        paddingBottom: 40, // Padding at the bottom
+        flexGrow: 1,
+        justifyContent: "center",
+        paddingHorizontal: 24,
+        paddingBottom: 40,
+        paddingTop: 60, // Ensure space for back button
     },
     backButton: {
-        position: 'absolute', // Absolute positioning
-        top: 40, // Position from top
-        left: 16, // Position from left
-        padding: 8, // Padding for touch area
-        zIndex: 1, // Ensure it's above other content
+        position: 'absolute',
+        top: 50, // Adjust as needed
+        left: 16,
+        padding: 8,
+        zIndex: 1,
     },
     form: {
-        width: "100%", // Take full width
-        alignItems: "center", // Center form elements horizontally
-        maxWidth: 400, // Optional: Limit max width
-        alignSelf: 'center', // Center the form container itself
+        width: "100%",
+        alignItems: "center",
+        maxWidth: 400,
+        alignSelf: 'center',
+        gap: 16, // Use gap for spacing between elements
     },
     titleText: {
-        fontSize: 28, // Title font size
-        fontWeight: "bold", // Bold font weight
-        marginBottom: 32, // Space below title
-        textAlign: "center", // Center text
-        color: "#333", // Dark text color
+        fontSize: 32, // Slightly larger title
+        fontWeight: "bold",
+        textAlign: "center",
+        color: "#333333",
+        marginBottom: 8,
+    },
+    subtitleText: {
+        fontSize: 16,
+        textAlign: "center",
+        color: "#555555",
+        marginBottom: 24, // More space before inputs
     },
     input: {
-        width: "100%", // Inputs take full width of form container
-        marginBottom: 16, // Space below each input
-        backgroundColor: '#FFFFFF', // White background for inputs
+        width: "100%",
+        backgroundColor: '#FFFFFF', // Ensure input background is white
     },
     loadingIndicator: {
-        marginVertical: 20, // Vertical margin for loading indicator
-    }
+        marginVertical: 20,
+    },
+    primaryButton: {
+        borderRadius: 12,
+        paddingVertical: 14,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
+        marginTop: 16, // Add margin top to separate from inputs
+    },
+    secondaryButton: {
+        borderRadius: 12,
+        paddingVertical: 14,
+        borderWidth: 1.5,
+        borderColor: "#6F4E37",
+    },
 });
 
 export default LoginScreen;

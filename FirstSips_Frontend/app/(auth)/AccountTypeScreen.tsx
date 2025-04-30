@@ -1,57 +1,56 @@
 import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import ScreenWideButton from '../components/ScreenWideButton'; // Assuming this component exists
 import { Ionicons } from '@expo/vector-icons'; // Assuming Ionicons are available
 
 const AccountTypeScreen = () => {
     const router = useRouter();
-    const params = useLocalSearchParams(); // Keeping this in case it's used elsewhere, though not in this component's logic
 
     // Function to handle button presses and navigate
-    const handleAccountTypeSelect = (isShopOwner: any) => {
+    const handleAccountTypeSelect = (isShopOwner: boolean) => {
         // Navigate to the SignUpScreen, passing the account type as a parameter
         router.push({
             pathname: "./SignUpScreen",
-            params: { isShopOwner }
+            params: { isShopOwner: String(isShopOwner) } // Ensure boolean is passed as string
         });
     };
 
     return (
-        // SafeAreaView helps handle notches and status bars
+        // Use a clean white background
         <SafeAreaView style={styles.safeArea}>
-            {/* Main container with background color */}
+            {/* Main container */}
             <View style={styles.container}>
                 {/* Back Button */}
                 <TouchableOpacity
                     style={styles.backButton}
                     onPress={() => router.back()}
-                    accessibilityLabel="Go back" // Accessibility label
+                    accessibilityLabel="Go back"
                 >
-                    <Ionicons name="arrow-back" size={24} color="#6F4E37" /> {/* Consistent back arrow color */}
+                    <Ionicons name="arrow-back" size={24} color="#555555" /> {/* Slightly muted back arrow */}
                 </TouchableOpacity>
 
                 {/* Content Container */}
                 <View style={styles.contentContainer}>
                     {/* Title Text */}
-                    <Text style={styles.titleText}>Select an account type</Text>
+                    <Text style={styles.titleText}>How will you use FirstSips?</Text>
+                    <Text style={styles.subtitleText}>Select your account type below.</Text>
 
-                    {/* Shopowner Button */}
+                    {/* Shopowner Button (Primary Style) */}
                     <ScreenWideButton
-                        text="Shopowner"
+                        text="I want to sell coffee (Shop Owner)"
                         onPress={() => handleAccountTypeSelect(true)}
-                        color="#D4A373" // Primary color for the more involved account type
-                        textColor="#FFFFFF" // White text for contrast
+                        color="#6F4E37" // Primary accent color
+                        textColor="#FFFFFF"
+                        style={styles.primaryButton}
                     />
 
-                    {/* Spacer View (can be replaced with gap in container if preferred) */}
-                    <View style={{ height: 16 }}></View>
-
-                    {/* Customer Button */}
+                    {/* Customer Button (Secondary Style) */}
                     <ScreenWideButton
-                        text="Customer"
+                        text="I want to buy coffee (Customer)"
                         onPress={() => handleAccountTypeSelect(false)}
-                        color="#F5EDD8" // Secondary color for the less involved account type
-                        textColor="#000000" // Dark text for contrast
+                        color="#FFFFFF" // Outlined style
+                        textColor="#6F4E37"
+                        style={styles.secondaryButton}
                     />
                 </View>
             </View>
@@ -62,33 +61,55 @@ const AccountTypeScreen = () => {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: "#F5EDD8", // Consistent background color
+        backgroundColor: "#FFFFFF", // Clean white background
     },
     container: {
         flex: 1,
-        backgroundColor: "#F5EDD8", // Consistent background color
-        alignItems: "center", // Center content horizontally
-        justifyContent: "center", // Center content vertically
-        paddingHorizontal: 24, // Add horizontal padding
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 24,
+        paddingBottom: 40, // Padding at the bottom
     },
     backButton: {
-        position: 'absolute', // Absolute positioning
-        top: 40, // Position from the top
-        left: 16, // Position from the left
-        padding: 8, // Padding for touch area
-        zIndex: 1, // Ensure it's above other content
+        position: 'absolute',
+        top: 50, // Adjust if needed based on device status bar height
+        left: 16,
+        padding: 8,
+        zIndex: 1,
     },
     contentContainer: {
-        width: "100%", // Take full width of the container
-        alignItems: "center", // Center items within this container
-        maxWidth: 400, // Optional: Limit max width on larger screens
+        width: "100%",
+        alignItems: "center",
+        maxWidth: 400,
+        gap: 20, // Use gap for spacing between buttons
     },
     titleText: {
-        marginBottom: 32, // More space below the title
-        fontSize: 28, // Slightly smaller font size than landing page title
-        fontWeight: "bold", // Bold font weight
-        textAlign: "center", // Center the text
-        color: "#333", // Dark text color
+        fontSize: 28,
+        fontWeight: "bold",
+        textAlign: "center",
+        color: "#333333", // Dark grey
+        marginBottom: 8, // Reduced margin
+    },
+    subtitleText: {
+        fontSize: 16,
+        textAlign: "center",
+        color: "#555555", // Medium grey
+        marginBottom: 32, // More space before buttons
+    },
+    primaryButton: {
+        borderRadius: 12,
+        paddingVertical: 14,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
+    },
+    secondaryButton: {
+        borderRadius: 12,
+        paddingVertical: 14,
+        borderWidth: 1.5,
+        borderColor: "#6F4E37",
     },
 });
 

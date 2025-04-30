@@ -1,4 +1,4 @@
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Switch } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Switch, SafeAreaView, Platform, KeyboardAvoidingView, Alert } from 'react-native';
 import { useState } from 'react';
 import { TextInput, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,31 +15,48 @@ const AddItemScreen = () => {
     const [isUnlimited, setIsUnlimited] = useState(false);
     const [isHidden, setIsHidden] = useState(false);
     const [images, setImages] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false); // Add loading state
 
     const router = useRouter();
 
     const pickImage = async () => {
+        // Request permissions if not granted
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to make this work!');
+            return;
+        }
+
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
-            aspect: [4, 3],
-            quality: 1,
+            aspect: [1, 1], // Square aspect ratio for consistency
+            quality: 0.8, // Slightly reduce quality for faster uploads
         });
 
-        if (!result.canceled) {
-            setImages([...images, result.assets[0].uri]);
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            // Limit number of images if desired (e.g., max 3)
+            if (images.length < 3) {
+                setImages([...images, result.assets[0].uri]);
+            } else {
+                Alert.alert('Limit Reached', 'You can add a maximum of 3 images.');
+            }
         }
+    };
+
+    const removeImage = (index: number) => {
+        setImages(images.filter((_, i) => i !== index));
     };
 
     const incrementQuantity = () => {
         if (isUnlimited || isHidden) return;
-        const currentQuantity = quantity === '' ? 0 : parseInt(quantity);
+        const currentQuantity = quantity === '' ? 0 : parseInt(quantity, 10);
         setQuantity((currentQuantity + 1).toString());
     };
 
     const decrementQuantity = () => {
         if (isUnlimited || isHidden) return;
-        const currentQuantity = quantity === '' ? 0 : parseInt(quantity);
+        const currentQuantity = quantity === '' ? 0 : parseInt(quantity, 10);
         if (currentQuantity > 0) {
             setQuantity((currentQuantity - 1).toString());
         }
@@ -69,242 +86,301 @@ const AddItemScreen = () => {
     };
 
     const handleAddItem = async () => {
+        setLoading(true); // Start loading
         try {
-          if (!name || !description || !price) {
-            alert("Please fill in all required fields");
-            return;
-          }
-      
-          if (!isUnlimited && !isHidden && !quantity) {
-            alert("Please specify a quantity or select Unlimited/Hidden");
-            return;
-          }
-      
-          const user = supabase.auth.getUser();
-          const userId = (await user).data.user?.id;
-      
-          if (!userId) {
-            alert("Not authenticated");
-            return;
-          }
-      
-          // Fetch shopId for current user
-          const { data: userData, error: userError } = await supabase
-            .from("users")
-            .select("shop_id")
-            .eq("id", userId)
-            .single();
-      
-          if (userError || !userData?.shop_id) {
-            alert("No shop found for this user");
-            return;
-          }
-      
-          const shopId = userData.shop_id;
-      
-          let finalQuantity: number;
-          if (isUnlimited) finalQuantity = -1;
-          else if (isHidden) finalQuantity = -2;
-          else finalQuantity = quantity === "" ? 0 : parseInt(quantity);
-      
-          const { error: insertError } = await supabase.from("items").insert([
-            {
-              shop_id: shopId,
-              name,
-              description,
-              price: parseFloat(price),
-              quantity: finalQuantity,
-              images,
-              created_at: new Date().toISOString(),
-            },
-          ]);
-      
-          if (insertError) throw insertError;
-      
-          alert("Product added successfully!");
-          router.push({
-            pathname: "/(tabs)/shop_owner/EditShopScreen",
-            params: { shopId },
-          });
-        } catch (error) {
-          console.error("Error adding product:", error);
-          alert("Failed to add product");
+            if (!name.trim() || !description.trim() || !price.trim()) {
+                Alert.alert("Validation Error", "Please fill in Name, Description, and Price.");
+                setLoading(false);
+                return;
+            }
+
+            if (!isUnlimited && !isHidden && quantity.trim() === '') {
+                Alert.alert("Validation Error", "Please specify a quantity or select Unlimited/Hidden.");
+                setLoading(false);
+                return;
+            }
+
+            const parsedPrice = parseFloat(price);
+            if (isNaN(parsedPrice) || parsedPrice < 0) {
+                Alert.alert("Validation Error", "Please enter a valid positive price.");
+                setLoading(false);
+                return;
+            }
+
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) { throw new Error("Not authenticated"); }
+
+            const { data: userData, error: userError } = await supabase
+                .from("users").select("shop_id").eq("id", user.id).single();
+            if (userError || !userData?.shop_id) { throw new Error("No shop found for this user"); }
+
+            const shopId = userData.shop_id;
+
+            let finalQuantity: number;
+            if (isUnlimited) finalQuantity = -1;
+            else if (isHidden) finalQuantity = -2;
+            else finalQuantity = quantity.trim() === "" ? 0 : parseInt(quantity, 10);
+
+            // TODO: Implement image uploading to Supabase Storage if needed
+            // For now, assuming 'images' state holds URIs or placeholders
+            const imageURLsToSave = images; // Replace with actual uploaded URLs if implementing uploads
+
+            const { error: insertError } = await supabase.from("items").insert([
+                {
+                    shop_id: shopId,
+                    name: name.trim(),
+                    description: description.trim(),
+                    price: parsedPrice,
+                    quantity: finalQuantity,
+                    images: imageURLsToSave, // Save the URLs
+                    created_at: new Date().toISOString(),
+                },
+            ]);
+
+            if (insertError) throw insertError;
+
+            Alert.alert("Success", "Product added successfully!");
+            // Navigate back to EditShopScreen, potentially passing a flag to refresh
+            router.back();
+
+        } catch (error: any) {
+            console.error("Error adding product:", error);
+            Alert.alert("Error", error.message || "Failed to add product");
+        } finally {
+            setLoading(false); // Stop loading
         }
-      };
-      
+    };
 
     return (
-        <ScrollView style={styles.background}>
-            <View style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+            <KeyboardAvoidingView
+                style={styles.keyboardAvoidingView}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
+            >
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={24} color="#6F4E37" />
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color="#555555" />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Add Product</Text>
+                    <Text style={styles.headerTitle}>Add New Item</Text>
+                    <View style={styles.headerSpacer} />
                 </View>
 
-                {/* Product Info */}
-                <TextInput
-                    label="Product Name"
-                    value={name}
-                    onChangeText={setName}
-                    mode="outlined"
-                    style={styles.input}
-                />
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContainer}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/* Product Info */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Item Details</Text>
+                        <TextInput
+                            label="Item Name"
+                            value={name}
+                            onChangeText={setName}
+                            mode="outlined"
+                            style={styles.input}
+                            theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                            outlineColor="#CCCCCC" activeOutlineColor="#6F4E37"
+                        />
+                        <TextInput
+                            label="Description"
+                            value={description}
+                            onChangeText={setDescription}
+                            mode="outlined"
+                            multiline
+                            numberOfLines={4}
+                            style={[styles.input, styles.multilineInput]}
+                            theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                            outlineColor="#CCCCCC" activeOutlineColor="#6F4E37"
+                        />
+                        <TextInput
+                            label="Price ($)"
+                            value={price}
+                            onChangeText={setPrice}
+                            mode="outlined"
+                            keyboardType="decimal-pad"
+                            style={styles.input}
+                            theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                            outlineColor="#CCCCCC" activeOutlineColor="#6F4E37"
+                        />
+                    </View>
 
-                <TextInput
-                    label="Description"
-                    value={description}
-                    onChangeText={setDescription}
-                    mode="outlined"
-                    multiline
-                    numberOfLines={4}
-                    style={[styles.input, styles.multilineInput]}
-                />
-
-                <TextInput
-                    label="Price ($)"
-                    value={price}
-                    onChangeText={setPrice}
-                    mode="outlined"
-                    keyboardType="decimal-pad"
-                    style={styles.input}
-                />
-
-                {/* Quantity Section */}
-                <Text style={styles.sectionTitle}>Inventory Management</Text>
-
-                <View style={styles.toggleContainer}>
-                    <Text>Unlimited Stock</Text>
-                    <Switch
-                        value={isUnlimited}
-                        onValueChange={toggleUnlimited}
-                        trackColor={{ false: '#767577', true: '#D4A373' }}
-                        thumbColor={isUnlimited ? '#f5dd4b' : '#f4f3f4'}
-                        disabled={isHidden}
-                    />
-                </View>
-
-                <View style={styles.toggleContainer}>
-                    <Text>Hide Item</Text>
-                    <Switch
-                        value={isHidden}
-                        onValueChange={toggleHidden}
-                        trackColor={{ false: '#767577', true: '#D4A373' }}
-                        thumbColor={isHidden ? '#f5dd4b' : '#f4f3f4'}
-                        disabled={isUnlimited}
-                    />
-                </View>
-
-                {!isUnlimited && !isHidden && (
-                    <View style={styles.quantityContainer}>
-                        <Text style={styles.quantityLabel}>Quantity in Stock:</Text>
-                        <View style={styles.quantityControls}>
-                            <TouchableOpacity
-                                style={styles.quantityButton}
-                                onPress={decrementQuantity}
-                            >
-                                <Ionicons name="remove" size={20} color="#6F4E37" />
-                            </TouchableOpacity>
-
-                            <TextInput
-                                value={quantity}
-                                onChangeText={handleQuantityChange}
-                                keyboardType="number-pad"
-                                style={styles.quantityInput}
-                                mode="outlined"
+                    {/* Inventory Section */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Inventory</Text>
+                        <View style={styles.toggleContainer}>
+                            <Text style={styles.toggleLabel}>Unlimited Stock</Text>
+                            <Switch
+                                value={isUnlimited}
+                                onValueChange={toggleUnlimited}
+                                trackColor={{ false: '#CCCCCC', true: '#A5D6A7' }} // Softer green
+                                thumbColor={isUnlimited ? '#66BB6A' : '#f4f3f4'}
+                                ios_backgroundColor="#CCCCCC"
+                                disabled={isHidden}
                             />
+                        </View>
+                        <View style={styles.toggleContainer}>
+                            <Text style={styles.toggleLabel}>Hide Item (Not Visible to Customers)</Text>
+                            <Switch
+                                value={isHidden}
+                                onValueChange={toggleHidden}
+                                trackColor={{ false: '#CCCCCC', true: '#FFCCBC' }} // Softer red/orange
+                                thumbColor={isHidden ? '#FF8A65' : '#f4f3f4'}
+                                ios_backgroundColor="#CCCCCC"
+                                disabled={isUnlimited}
+                            />
+                        </View>
+                        {!isUnlimited && !isHidden && (
+                            <View style={styles.quantityRow}>
+                                <Text style={styles.quantityLabel}>Quantity in Stock:</Text>
+                                <View style={styles.quantityControls}>
+                                    <TouchableOpacity style={styles.quantityButton} onPress={decrementQuantity}>
+                                        <Ionicons name="remove-outline" size={20} color="#6F4E37" />
+                                    </TouchableOpacity>
+                                    <TextInput
+                                        value={quantity}
+                                        onChangeText={handleQuantityChange}
+                                        keyboardType="number-pad"
+                                        style={styles.quantityInput}
+                                        mode="outlined" // Use outlined for consistency
+                                        dense // Make it smaller
+                                        textAlign="center"
+                                        theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                                        outlineColor="#CCCCCC" activeOutlineColor="#6F4E37"
+                                    />
+                                    <TouchableOpacity style={styles.quantityButton} onPress={incrementQuantity}>
+                                        <Ionicons name="add-outline" size={20} color="#6F4E37" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+                    </View>
 
-                            <TouchableOpacity
-                                style={styles.quantityButton}
-                                onPress={incrementQuantity}
-                            >
-                                <Ionicons name="add" size={20} color="#6F4E37" />
-                            </TouchableOpacity>
+                    {/* Image Section */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Item Images (Max 3)</Text>
+                        <View style={styles.imageContainer}>
+                            {images.map((uri, index) => (
+                                <View key={index} style={styles.imageWrapper}>
+                                    <Image source={{ uri }} style={styles.imagePreview} />
+                                    <TouchableOpacity style={styles.removeImageButton} onPress={() => removeImage(index)}>
+                                        <Ionicons name="close-circle" size={24} color="#D32F2F" />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                            {images.length < 3 && ( // Only show add button if limit not reached
+                                <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
+                                    <Ionicons name="add-outline" size={32} color="#AAAAAA" />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
-                )}
 
-                {/* Image Section */}
-                <Text style={styles.sectionTitle}>Product Images</Text>
-                <View style={styles.imageContainer}>
-                    {images.map((uri, index) => (
-                        <Image key={index} source={{ uri }} style={styles.imagePreview} />
-                    ))}
-                    <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
-                        <Ionicons name="add-circle" size={24} color="#6F4E37" />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Submit Button */}
-                <ScreenWideButton
-                    text="Add Product"
-                    onPress={handleAddItem}  // Changed from handleCreateItem to handleAddItem
-                    color="#D4A373"
-                    textColor="#FFFFFF"
-                />
-            </View>
-        </ScrollView>
+                    {/* Submit Button */}
+                    <ScreenWideButton
+                        text="Add Item"
+                        onPress={handleAddItem}
+                        color="#6F4E37" // Primary accent color
+                        textColor="#FFFFFF"
+                        style={styles.primaryButton}
+                        disabled={loading} // Disable button while loading
+                        loading={loading} // Show loading indicator on button
+                    />
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    background: {
+    safeArea: {
         flex: 1,
-        backgroundColor: '#F5EDD8',
+        backgroundColor: '#FFFFFF', // White background
     },
-    container: {
-        padding: 16,
+    keyboardAvoidingView: {
+        flex: 1,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 24,
-        paddingTop: 40,
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEEEEE',
+    },
+    backButton: {
+        padding: 8,
     },
     headerTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginLeft: 16,
-        color: '#6F4E37',
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#333333',
+    },
+    headerSpacer: {
+        width: 40, // Match back button touch area
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContainer: {
+        padding: 16,
+        paddingBottom: 40, // Extra padding at bottom
+    },
+    section: {
+        marginBottom: 24,
+    },
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        marginBottom: 16,
+        color: '#333333',
     },
     input: {
-        marginBottom: 16,
         backgroundColor: '#FFFFFF',
+        marginBottom: 16, // Space between inputs
     },
     multilineInput: {
         height: 100,
+        textAlignVertical: 'top',
     },
     toggleContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 12,
+        paddingVertical: 12, // Vertical padding
+        borderBottomWidth: 1,
+        borderBottomColor: '#F5F5F5', // Light separator
     },
-    quantityContainer: {
-        backgroundColor: '#FFFFFF',
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 16,
+    toggleLabel: {
+        fontSize: 16,
+        color: '#555555',
+        flexShrink: 1, // Allow text to wrap
+        marginRight: 8,
+    },
+    quantityRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 16, // Space above quantity controls
+        paddingVertical: 8,
     },
     quantityLabel: {
         fontSize: 16,
-        marginBottom: 12,
-        color: '#6F4E37',
+        color: '#555555',
     },
     quantityControls: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
     },
     quantityButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 36, // Slightly larger button
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#F5F5F5',
         justifyContent: 'center',
         alignItems: 'center',
@@ -312,37 +388,55 @@ const styles = StyleSheet.create({
         borderColor: '#E0E0E0',
     },
     quantityInput: {
-        width: 80,
+        width: 60, // Adjust width
+        height: 40, // Adjust height to match buttons better
         textAlign: 'center',
-        marginHorizontal: 12,
+        marginHorizontal: 10,
         backgroundColor: '#FFFFFF',
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 12,
-        color: '#6F4E37',
+        fontSize: 16,
     },
     imageContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 8,
-        marginBottom: 24,
+        gap: 12, // Space between images
+    },
+    imageWrapper: {
+        position: 'relative',
     },
     imagePreview: {
-        width: 100,
-        height: 100,
+        width: 80, // Smaller preview
+        height: 80,
         borderRadius: 8,
+        backgroundColor: '#F0F0F0',
+    },
+    removeImageButton: {
+        position: 'absolute',
+        top: -8,
+        right: -8,
+        backgroundColor: 'rgba(255, 255, 255, 0.8)', // Semi-transparent white
+        borderRadius: 12,
+        padding: 2,
     },
     addImageButton: {
-        width: 100,
-        height: 100,
+        width: 80,
+        height: 80,
         borderRadius: 8,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#F8F8F8', // Lighter grey
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#6F4E37',
+        borderWidth: 1.5,
+        borderColor: '#E0E0E0',
+        borderStyle: 'dashed',
+    },
+    primaryButton: {
+        borderRadius: 12,
+        paddingVertical: 14,
+        marginTop: 24, // Space above button
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
     },
 });
 

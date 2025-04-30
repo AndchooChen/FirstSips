@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,53 +13,65 @@ interface ShopItem {
 }
 
 interface Shop {
-    shopName: string;
+    id: string; // Added id for consistency
+    shop_name: string;
     description?: string;
-    profileImage?: string;
-    ownerId?: string;
+    profile_image?: string;
+    owner_id?: string;
+    street_address?: string; // Added for potential use
+    city?: string; // Added for potential use
+    state?: string; // Added for potential use
+    zip?: string; // Added for potential use
 }
 
 export default function ClosedShopScreen() {
     const { shopId } = useLocalSearchParams();
     const [shop, setShop] = useState<Shop | null>(null);
     const [items, setItems] = useState<ShopItem[]>([]);
+    const [loading, setLoading] = useState(true); // Add loading state
     const router = useRouter();
 
     useEffect(() => {
         const fetchShopAndItems = async () => {
-          if (!shopId) return;
-      
-          try {
-            const { data: shopData, error: shopError } = await supabase
-              .from("shops")
-              .select("*")
-              .eq("id", shopId)
-              .single();
-      
-            if (shopError) throw shopError;
-            setShop(shopData);
-      
-            const { data: itemsData, error: itemsError } = await supabase
-              .from("items")
-              .select("*")
-              .eq("shop_id", shopId);
-      
-            if (itemsError) throw itemsError;
-      
-            const itemsList: ShopItem[] = itemsData.map((item) => ({
-              ...item,
-              id: item.id,
-            }));
-      
-            setItems(itemsList);
-          } catch (error) {
-            console.error("Error fetching shop or items:", error);
-          }
+            if (!shopId) {
+                setLoading(false);
+                return;
+            }
+            setLoading(true);
+            try {
+                const { data: shopData, error: shopError } = await supabase
+                    .from("shops")
+                    .select("*")
+                    .eq("id", shopId)
+                    .single();
+
+                if (shopError) throw shopError;
+                setShop(shopData);
+
+                const { data: itemsData, error: itemsError } = await supabase
+                    .from("items")
+                    .select("*")
+                    .eq("shop_id", shopId);
+
+                if (itemsError) throw itemsError;
+
+                const itemsList: ShopItem[] = itemsData.map((item) => ({
+                    ...item,
+                    id: item.id,
+                }));
+
+                setItems(itemsList);
+            } catch (error) {
+                console.error("Error fetching shop or items:", error);
+                // Optionally show an error alert
+            } finally {
+                setLoading(false);
+            }
         };
-      
+
         fetchShopAndItems();
-      }, [shopId]);
-      
+    }, [shopId]);
+
 
     const handleOwnerInfo = () => {
         if (shop?.owner_id) {
@@ -70,186 +82,233 @@ export default function ClosedShopScreen() {
         }
     };
 
+    // Loading State
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#6F4E37" />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    // No Shop Found State
     if (!shop) {
         return (
-            <View style={styles.loadingContainer}>
-                <Text>Loading...</Text>
-            </View>
+            <SafeAreaView style={styles.safeArea}>
+                 <View style={styles.header}>
+                    <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
+                        <Ionicons name="arrow-back" size={24} color="#555555" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Shop Not Found</Text>
+                    <View style={styles.headerButton} /> {/* Spacer */}
+                </View>
+                <View style={styles.loadingContainer}>
+                    <Text style={styles.emptyText}>Could not load shop details.</Text>
+                </View>
+            </SafeAreaView>
         );
     }
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+            {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.headerButton}
-                    onPress={() => router.back()}
-                >
-                    <Ionicons name="arrow-back" size={24} color="#6F4E37" />
+                <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
+                    <Ionicons name="arrow-back" size={24} color="#555555" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{shop.shop_name}</Text>
-                <TouchableOpacity
-                    style={styles.headerButton}
-                    onPress={handleOwnerInfo}
-                >
-                    <Ionicons name="information-circle" size={24} color="#6F4E37" />
+                <Text style={styles.headerTitle} numberOfLines={1}>{shop.shop_name}</Text>
+                <TouchableOpacity style={styles.headerButton} onPress={handleOwnerInfo}>
+                    <Ionicons name="information-circle-outline" size={24} color="#555555" />
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.scrollView}>
+            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+                {/* Shop Info Section */}
                 <View style={styles.shopInfo}>
                     <Image
-                        source={
-                            shop.profile_image
-                                ? { uri: shop.profile_image }
-                                : require('../../assets/images/stock_coffee.png')
-                        }
+                        source={shop.profile_image ? { uri: shop.profile_image } : require('../../assets/images/no_shop_image.png')}
                         style={styles.shopImage}
                     />
                     <Text style={styles.shopName}>{shop.shop_name}</Text>
                     {shop.description && (
                         <Text style={styles.shopDescription}>{shop.description}</Text>
                     )}
+                    {/* Closed Banner */}
                     <View style={styles.closedBanner}>
-                        <Ionicons name="time" size={20} color="#F44336" />
+                        <Ionicons name="time-outline" size={20} color="#D32F2F" /> {/* Error color */}
                         <Text style={styles.closedText}>Currently Closed</Text>
                     </View>
                 </View>
 
+                {/* Items Section */}
                 <View style={styles.itemsContainer}>
-                    {items.map((item) => (
-                        <View key={item.id} style={styles.itemCard}>
-                            <Image
-                                source={
-                                    item.images?.[0]
-                                        ? { uri: item.images[0] }
-                                        : require('../../assets/images/no_item_image.png')
-                                }
-                                style={styles.itemImage}
-                            />
-                            <View style={styles.itemInfo}>
-                                <Text style={styles.itemName}>{item.name}</Text>
-                                {item.description && (
-                                    <Text style={styles.itemDescription} numberOfLines={2}>
-                                        {item.description}
-                                    </Text>
-                                )}
-                                <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
+                    <Text style={styles.itemsTitle}>Menu Items</Text>
+                    {items.length === 0 ? (
+                        <Text style={styles.emptyText}>No items available for this shop.</Text>
+                    ) : (
+                        items.map((item) => (
+                            // Item Card (Closed State)
+                            <View key={item.id} style={[styles.itemCard, styles.itemCardClosed]}>
+                                <Image
+                                    source={item.images?.[0] ? { uri: item.images[0] } : require('../../assets/images/no_item_image.png')}
+                                    style={styles.itemImage}
+                                />
+                                <View style={styles.itemInfo}>
+                                    <Text style={styles.itemName}>{item.name}</Text>
+                                    {item.description && (
+                                        <Text style={styles.itemDescription} numberOfLines={2}>
+                                            {item.description}
+                                        </Text>
+                                    )}
+                                    <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
+                                </View>
                             </View>
-                        </View>
-                    ))}
+                        ))
+                    )}
                 </View>
             </ScrollView>
-        </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
+    safeArea: {
         flex: 1,
-        backgroundColor: '#F5F5F5',
+        backgroundColor: '#FFFFFF', // White background
+    },
+    container: { // Redundant with safeArea, can be removed if safeArea is root
+        flex: 1,
+        backgroundColor: '#FFFFFF',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 12, // Adjusted padding
         backgroundColor: '#FFFFFF',
         borderBottomWidth: 1,
-        borderBottomColor: '#E0E0E0',
-        marginTop: 40,
+        borderBottomColor: '#EEEEEE', // Light border
     },
     headerButton: {
-        padding: 8,
+        padding: 8, // Touch area
+        width: 40, // Ensure consistent width for spacing
+        alignItems: 'center',
     },
     headerTitle: {
+        flex: 1, // Allow title to take space
         fontSize: 20,
-        fontWeight: 'bold',
-        color: '#6F4E37',
-        flex: 1,
+        fontWeight: '600', // Semi-bold
+        color: '#333333', // Dark grey
         textAlign: 'center',
+        marginHorizontal: 8, // Space around title
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: '#FFFFFF', // Match background
     },
     scrollView: {
         flex: 1,
     },
     shopInfo: {
         alignItems: "center",
-        padding: 20,
-        backgroundColor: "#FFFFFF",
+        paddingVertical: 24, // Increased vertical padding
+        paddingHorizontal: 16,
+        backgroundColor: "#FFFFFF", // White background
         borderBottomWidth: 1,
-        borderBottomColor: '#E0E0E0',
+        borderBottomColor: '#EEEEEE', // Light border
     },
     shopImage: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        marginBottom: 12,
+        width: 100, // Larger image
+        height: 100,
+        borderRadius: 50, // Circular image
+        marginBottom: 16,
+        backgroundColor: '#F0F0F0', // Placeholder background
     },
     shopName: {
-        fontSize: 20,
-        fontWeight: "600",
+        fontSize: 24, // Larger shop name
+        fontWeight: "bold",
         color: "#333333",
-        marginBottom: 4,
+        marginBottom: 8,
     },
     shopDescription: {
-        fontSize: 14,
-        color: "#666666",
+        fontSize: 15, // Slightly larger description
+        color: "#555555", // Medium grey
         textAlign: "center",
-        marginBottom: 12,
+        marginBottom: 16,
+        lineHeight: 22, // Improve readability
     },
     closedBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFEBEE',
-        padding: 8,
-        borderRadius: 8,
+        backgroundColor: '#FFEBEE', // Light red background
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20, // Pill shape
         marginTop: 8,
     },
     closedText: {
-        color: '#F44336',
+        color: '#D32F2F', // Darker red text
         marginLeft: 8,
-        fontWeight: '500',
+        fontWeight: '600', // Semi-bold
+        fontSize: 14,
     },
     itemsContainer: {
         padding: 16,
     },
-    itemCard: {
+    itemsTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333333',
+        marginBottom: 16,
+    },
+    itemCard: { // Base card style
         backgroundColor: '#FFFFFF',
         borderRadius: 12,
         marginBottom: 16,
-        overflow: 'hidden',
-        opacity: 0.8,
         flexDirection: 'row',
-        padding: 16,
+        padding: 12, // Slightly reduced padding
+        borderWidth: 1,
+        borderColor: '#EEEEEE', // Light border for definition
+    },
+    itemCardClosed: { // Style for closed state
+        opacity: 0.6, // Dim the card
     },
     itemImage: {
-        width: 80,
-        height: 80,
+        width: 70, // Adjusted size
+        height: 70,
         borderRadius: 8,
+        marginRight: 12,
+        backgroundColor: '#F0F0F0', // Placeholder background
     },
     itemInfo: {
         flex: 1,
-        marginLeft: 12,
-        justifyContent: 'space-between',
+        justifyContent: 'center', // Center content vertically
     },
     itemName: {
         fontSize: 16,
-        fontWeight: 'bold',
+        fontWeight: '600', // Semi-bold
         color: '#333333',
+        marginBottom: 4,
     },
     itemDescription: {
         fontSize: 14,
         color: '#666666',
-        marginVertical: 4,
+        marginBottom: 6, // Adjusted spacing
     },
     itemPrice: {
+        fontSize: 15, // Slightly adjusted size
+        fontWeight: 'bold',
+        color: '#6F4E37', // Accent color
+    },
+    emptyText: {
+        textAlign: 'center',
+        color: '#888888', // Lighter grey for empty text
+        marginTop: 16,
         fontSize: 16,
-        fontWeight: '600',
-        color: '#6F4E37',
     },
 });
