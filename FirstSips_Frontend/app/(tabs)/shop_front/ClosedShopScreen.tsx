@@ -13,22 +13,22 @@ interface ShopItem {
 }
 
 interface Shop {
-    id: string; // Added id for consistency
+    id: string;
     shop_name: string;
     description?: string;
     profile_image?: string;
     owner_id?: string;
-    street_address?: string; // Added for potential use
-    city?: string; // Added for potential use
-    state?: string; // Added for potential use
-    zip?: string; // Added for potential use
+    street_address?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
 }
 
 export default function ClosedShopScreen() {
     const { shopId } = useLocalSearchParams();
     const [shop, setShop] = useState<Shop | null>(null);
     const [items, setItems] = useState<ShopItem[]>([]);
-    const [loading, setLoading] = useState(true); // Add loading state
+    const [loading, setLoading] = useState(true);
     const router = useRouter();
 
     useEffect(() => {
@@ -63,7 +63,6 @@ export default function ClosedShopScreen() {
                 setItems(itemsList);
             } catch (error) {
                 console.error("Error fetching shop or items:", error);
-                // Optionally show an error alert
             } finally {
                 setLoading(false);
             }
@@ -82,7 +81,6 @@ export default function ClosedShopScreen() {
         }
     };
 
-    // Loading State
     if (loading) {
         return (
             <SafeAreaView style={styles.safeArea}>
@@ -93,7 +91,6 @@ export default function ClosedShopScreen() {
         );
     }
 
-    // No Shop Found State
     if (!shop) {
         return (
             <SafeAreaView style={styles.safeArea}>
@@ -102,7 +99,7 @@ export default function ClosedShopScreen() {
                         <Ionicons name="arrow-back" size={24} color="#555555" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Shop Not Found</Text>
-                    <View style={styles.headerButton} /> {/* Spacer */}
+                    <View style={styles.headerButton} />
                 </View>
                 <View style={styles.loadingContainer}>
                     <Text style={styles.emptyText}>Could not load shop details.</Text>
@@ -113,7 +110,6 @@ export default function ClosedShopScreen() {
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color="#555555" />
@@ -125,7 +121,6 @@ export default function ClosedShopScreen() {
             </View>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                {/* Shop Info Section */}
                 <View style={styles.shopInfo}>
                     <Image
                         source={shop.profile_image ? { uri: shop.profile_image } : require('../../assets/images/no_shop_image.png')}
@@ -135,21 +130,18 @@ export default function ClosedShopScreen() {
                     {shop.description && (
                         <Text style={styles.shopDescription}>{shop.description}</Text>
                     )}
-                    {/* Closed Banner */}
                     <View style={styles.closedBanner}>
                         <Ionicons name="time-outline" size={20} color="#D32F2F" /> {/* Error color */}
                         <Text style={styles.closedText}>Currently Closed</Text>
                     </View>
                 </View>
 
-                {/* Items Section */}
                 <View style={styles.itemsContainer}>
                     <Text style={styles.itemsTitle}>Menu Items</Text>
                     {items.length === 0 ? (
                         <Text style={styles.emptyText}>No items available for this shop.</Text>
                     ) : (
                         items.map((item) => (
-                            // Item Card (Closed State)
                             <View key={item.id} style={[styles.itemCard, styles.itemCardClosed]}>
                                 <Image
                                     source={item.images?.[0] ? { uri: item.images[0] } : require('../../assets/images/no_item_image.png')}

@@ -1,54 +1,44 @@
 import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
-import ScreenWideButton from '../components/ScreenWideButton'; // Assuming this component exists
-import { Ionicons } from '@expo/vector-icons'; // Assuming Ionicons are available
+import ScreenWideButton from '../components/ScreenWideButton';
+import { Ionicons } from '@expo/vector-icons';
 
 const AccountTypeScreen = () => {
     const router = useRouter();
 
-    // Function to handle button presses and navigate
     const handleAccountTypeSelect = (isShopOwner: boolean) => {
-        // Navigate to the SignUpScreen, passing the account type as a parameter
         router.push({
             pathname: "./SignUpScreen",
-            params: { isShopOwner: String(isShopOwner) } // Ensure boolean is passed as string
         });
     };
 
     return (
-        // Use a clean white background
         <SafeAreaView style={styles.safeArea}>
-            {/* Main container */}
             <View style={styles.container}>
-                {/* Back Button */}
                 <TouchableOpacity
                     style={styles.backButton}
                     onPress={() => router.back()}
                     accessibilityLabel="Go back"
                 >
-                    <Ionicons name="arrow-back" size={24} color="#555555" /> {/* Slightly muted back arrow */}
+                    <Ionicons name="arrow-back" size={24} color="#555555" />
                 </TouchableOpacity>
 
-                {/* Content Container */}
                 <View style={styles.contentContainer}>
-                    {/* Title Text */}
                     <Text style={styles.titleText}>How will you use FirstSips?</Text>
                     <Text style={styles.subtitleText}>Select your account type below.</Text>
 
-                    {/* Shopowner Button (Primary Style) */}
                     <ScreenWideButton
                         text="I want to sell coffee (Shop Owner)"
                         onPress={() => handleAccountTypeSelect(true)}
-                        color="#6F4E37" // Primary accent color
+                        color="#6F4E37"
                         textColor="#FFFFFF"
                         style={styles.primaryButton}
                     />
 
-                    {/* Customer Button (Secondary Style) */}
                     <ScreenWideButton
                         text="I want to buy coffee (Customer)"
                         onPress={() => handleAccountTypeSelect(false)}
-                        color="#FFFFFF" // Outlined style
+                        color="#FFFFFF"
                         textColor="#6F4E37"
                         style={styles.secondaryButton}
                     />
@@ -61,18 +51,18 @@ const AccountTypeScreen = () => {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: "#FFFFFF", // Clean white background
+        backgroundColor: "#FFFFFF",
     },
     container: {
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
         paddingHorizontal: 24,
-        paddingBottom: 40, // Padding at the bottom
+        paddingBottom: 40,
     },
     backButton: {
         position: 'absolute',
-        top: 50, // Adjust if needed based on device status bar height
+        top: 50,
         left: 16,
         padding: 8,
         zIndex: 1,
@@ -81,20 +71,20 @@ const styles = StyleSheet.create({
         width: "100%",
         alignItems: "center",
         maxWidth: 400,
-        gap: 20, // Use gap for spacing between buttons
+        gap: 20, 
     },
     titleText: {
         fontSize: 28,
         fontWeight: "bold",
         textAlign: "center",
-        color: "#333333", // Dark grey
-        marginBottom: 8, // Reduced margin
+        color: "#333333",
+        marginBottom: 8,
     },
     subtitleText: {
         fontSize: 16,
         textAlign: "center",
-        color: "#555555", // Medium grey
-        marginBottom: 32, // More space before buttons
+        color: "#555555",
+        marginBottom: 32,
     },
     primaryButton: {
         borderRadius: 12,

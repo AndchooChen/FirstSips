@@ -1,119 +1,247 @@
-import { View, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
-import { Text, Button, Surface, ActivityIndicator } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'; // Removed SafeAreaView
+import { Text, Button, Surface } from 'react-native-paper';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase';
 
-// Interfaces remain the same...
-interface OrderDetails { /* ... */ }
-interface OrderItem { /* ... */ }
-interface ShopData { /* ... */ }
+// --- Interface Definitions ---
+
+interface OrderDetails {
+  order_id: string;
+  customer_name: string;
+  pickup_time: string;
+  order_number: string;
+  shop_id: string;
+  status: 'pending' | 'accepted' | 'preparing' | 'ready' | 'completed';
+  total_amount: number;
+  total?: number; // Some orders might use total instead of total_amount
+}
+
+interface OrderItem {
+  id: string;
+  order_id: string;
+  item_id: string;
+  quantity: number;
+  price: number;
+  name?: string; // Added after joining with items table
+  description?: string; // Added after joining with items table
+}
+
+interface ShopData {
+  id: string;
+  shop_name: string;
+  street_address: string;
+  city: string;
+  state: string;
+  zip: string;
+  shop_owner_id: string; // Assuming shop_owner_id exists to link to users
+  // Removed phone_number as it will be fetched from user
+}
+
+interface UserData {
+    id: string;
+    phone_number: string; // Assuming phone_number exists in the users table
+    // Other user fields...
+}
+
+// --- Component Start ---
 
 const SuccessScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [orderData, setOrderData] = useState<OrderDetails | null>(null);
   const [shopData, setShopData] = useState<ShopData | null>(null);
+  const [shopOwnerPhone, setShopOwnerPhone] = useState<string | null>(null); // State for shop owner's phone
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [loading, setLoading] = useState(true); // Added loading state
+  const [loading, setLoading] = useState(true); // Loading state for data fetching
 
-  // getOrderDetails function remains largely the same...
   const getOrderDetails = async () => {
-    setLoading(true);
-    if (!params.orderId) { setLoading(false); return; }
-    try {
-        // Fetch order
-        const { data: orderData, error: orderError } = await supabase.from('orders').select('*').eq('id', params.orderId).single();
-        if (orderError || !orderData) { throw orderError || new Error('Order not found'); }
-        setOrderData({ ...orderData, order_id: orderData.id, pickup_time: orderData.pickup_time });
-
-        // Fetch order items
-        const { data: orderItemsData, error: orderItemsError } = await supabase.from('order_items').select('*, items(name, description)').eq('order_id', orderData.id);
-        if (!orderItemsError && orderItemsData) {
-            const processedItems = orderItemsData.map(item => ({
-                id: item.id, order_id: item.order_id, item_id: item.item_id, quantity: item.quantity, price: item.price,
-                name: (item.items as any)?.name || 'Unknown Item', description: (item.items as any)?.description || ''
-            }));
-            setOrderItems(processedItems);
-        } else { console.error('Error fetching order items:', orderItemsError); }
-
-        // Fetch shop
-        const { data: shopData, error: shopError } = await supabase.from("shops").select("*").eq("id", orderData.shop_id).single();
-        if (shopError || !shopData) { throw shopError || new Error('Shop not found'); }
-        setShopData(shopData);
-
-    } catch (error: any) {
-        console.error('Error fetching success details:', error.message);
-        // Optionally show an error message to the user
-    } finally {
-        setLoading(false);
+    setLoading(true); // Start loading
+    if (!params.orderId) {
+      setLoading(false);
+      return;
     }
+
+    const orderId = params.orderId as string; // Ensure orderId is string
+
+    // Fetch order by ID
+    const { data: orderData, error: orderError } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    if (orderError || !orderData) {
+      console.error('Error fetching order:', orderError);
+      setLoading(false);
+      return;
+    }
+
+    setOrderData({
+      ...orderData,
+      order_id: orderData.id,
+      pickup_time: orderData.pickup_time,
+    });
+
+    // Fetch order items
+    const { data: orderItemsData, error: orderItemsError } = await supabase
+      .from('order_items')
+      .select(`
+        id,
+        order_id,
+        item_id,
+        quantity,
+        price,
+        items(name, description)
+      `)
+      .eq('order_id', orderData.id);
+
+    if (!orderItemsError && orderItemsData) {
+      // Process the joined data to flatten the structure
+      const processedItems = orderItemsData.map(item => {
+        // Handle the nested items object from the join
+        const itemDetails = item.items as any;
+        return {
+          id: item.id,
+          order_id: item.order_id,
+          item_id: item.item_id,
+          quantity: item.quantity,
+          price: item.price,
+          name: itemDetails?.name || 'Unknown Item',
+          description: itemDetails?.description || ''
+        };
+      });
+
+      setOrderItems(processedItems);
+    } else {
+      console.error('Error fetching order items:', orderItemsError);
+    }
+
+    // Fetch related shop using shop_id from the order
+    const { data: shopData, error: shopError } = await supabase
+      .from("shops")
+      .select("*, owner_id") 
+      .eq("id", orderData.shop_id)
+      .single();
+
+    if (shopError || !shopData) {
+      console.error('Error fetching shop:', shopError);
+      setLoading(false);
+      return;
+    }
+
+    setShopData(shopData);
+
+    // Fetch shop owner's phone number from the users table
+    if (shopData.owner_id) {
+        const { data: userData, error: userError } = await supabase
+            .from("users")
+            .select("phone_number") // Select only the phone_number
+            .eq("id", shopData.owner_id)
+            .single();
+
+        if (userError || !userData) {
+            console.error('Error fetching shop owner user data:', userError);
+            setShopOwnerPhone('N/A'); // Indicate phone not available
+        } else {
+            setShopOwnerPhone(userData.phone_number);
+        }
+    } else {
+        setShopOwnerPhone('N/A'); // Indicate no owner ID
+    }
+
+    setLoading(false); // End loading
   }
+
 
   useEffect(() => {
     getOrderDetails();
-  }, [params.orderId]);
+  }, [params.orderId]); // Rerun effect if orderId changes
 
-  // Loading state
-  if (loading) {
+  // Show loading indicator while data is being fetched
+  if (loading || !orderData || !shopData) {
     return (
-      <SafeAreaView style={[styles.container, styles.loadingContainer]}>
+      <View style={styles.loadingContainer}> {/* Use View instead of SafeAreaView */}
         <ActivityIndicator size="large" color="#6F4E37" />
-      </SafeAreaView>
+        <Text style={styles.loadingText}>Loading order details...</Text>
+      </View>
     );
   }
 
-  // Error or no data state
-  if (!orderData || !shopData) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Could not load order details.</Text>
-        <Button mode="outlined" onPress={() => router.push("/(tabs)/dashboard/DashboardScreen")} style={styles.errorButton}>
-          Return to Home
-        </Button>
-      </SafeAreaView>
-    );
-  }
+  // Calculate total from order items if needed
+  const calculateTotal = () => {
+    if (orderData.total_amount || orderData.total) {
+      return ((orderData.total_amount || orderData.total || 0)).toFixed(2);
+    }
 
-  // Calculate total function remains the same...
-  const calculateTotal = () => { /* ... */ };
+    // Calculate from order items if no total is available
+    return orderItems
+      .reduce((sum, item) => sum + (item.price * item.quantity), 0)
+      .toFixed(2);
+  };
 
-  const DetailRow = ({ icon, label, value }: { icon: string; label: string; value?: string }) => (
+  // Helper component for displaying detail rows
+  const DetailRow = ({ icon, label, value }: { icon: any; label: string; value?: string | null }) => ( // Allow value to be null
     <View style={styles.detailRow}>
       <Ionicons name={icon} size={24} color="#6F4E37" style={styles.detailIcon} />
       <View style={styles.detailText}>
         <Text style={styles.detailLabel}>{label}</Text>
-        <Text style={styles.detailValue}>{value || 'Loading...'}</Text>
+        {/* Display value or 'Loading...' or 'N/A' */}
+        <Text style={styles.detailValue}>{value !== undefined && value !== null ? value : 'Loading...'}</Text>
       </View>
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Use View instead of Surface for simpler background control */}
-        <View style={styles.contentCard}>
+    // Use View instead of SafeAreaView and wrap content in ScrollView
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollViewContent}>
+        <Surface style={styles.surface}>
           <View style={styles.iconContainer}>
             <Ionicons name="checkmark-circle" size={80} color="#4CAF50" />
           </View>
 
           <Text style={styles.title}>Order Confirmed!</Text>
-          <Text style={styles.subtitle}>Thank you for ordering with FirstSips.</Text>
+          <Text style={styles.subtitle}>Thank you for ordering with FirstSips</Text>
 
           <View style={styles.detailsContainer}>
-            <DetailRow icon="time-outline" label="Pickup Time" value={orderData.pickup_time} />
-            <DetailRow icon="storefront-outline" label="Pickup Location" value={shopData.shop_name} />
-            <DetailRow icon="location-outline" label="Address" value={`${shopData.street_address}, ${shopData.city}, ${shopData.state} ${shopData.zip}`} />
-            <DetailRow icon="call-outline" label="Phone" value={shopData.phone_number || 'N/A'} />
-            <DetailRow icon="receipt-outline" label="Order Number" value={`FS-${orderData.order_id.slice(-6).toUpperCase()}`} />
-            <DetailRow icon="cash-outline" label="Total Amount" value={`$${calculateTotal()}`} />
+            <DetailRow
+              icon="time"
+              label="Pickup Time"
+              value={orderData.pickup_time}
+            />
+            <DetailRow
+              icon="business"
+              label="Pickup Location"
+              value={shopData.shop_name}
+            />
+            <DetailRow
+              icon="location"
+              label="Address"
+              value={`${shopData.street_address}, ${shopData.city}, ${shopData.state} ${shopData.zip}`}
+            />
+            <DetailRow
+              icon="call"
+              label="Phone"
+              value={shopOwnerPhone} // Use the fetched shop owner phone
+            />
+            <DetailRow
+              icon="receipt"
+              label="Order Number"
+              value={`FS-${orderData.order_id.slice(-6)}`}
+            />
+            <DetailRow
+              icon="cash"
+              label="Total Amount"
+              value={`$${calculateTotal()}`}
+            />
           </View>
 
           {/* Order Items Section */}
           {orderItems.length > 0 && (
             <View style={styles.orderItemsContainer}>
-              <Text style={styles.orderItemsTitle}>Your Order</Text>
+              <Text style={styles.orderItemsTitle}>Order Items</Text>
               {orderItems.map((item) => (
                 <View key={item.id} style={styles.orderItemRow}>
                   <View style={styles.orderItemInfo}>
@@ -126,59 +254,65 @@ const SuccessScreen = () => {
             </View>
           )}
 
-          {/* Use ScreenWideButton for consistency */}
           <Button
             mode="contained"
-            onPress={() => router.replace("/(tabs)/dashboard/DashboardScreen")} // Use replace
-            style={styles.primaryButton} // Apply primary button style
-            labelStyle={styles.primaryButtonText} // Style text inside button
+            onPress={() => router.push("/(tabs)/dashboard/DashboardScreen")}
+            style={styles.button}
           >
             Return to Home
           </Button>
-        </View>
+        </Surface>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
+// --- Styles ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF', // White background
-    paddingHorizontal: 16, // Horizontal padding for the screen
+    backgroundColor: '#FFFFFF',
+    paddingTop: 40,
+    // Removed padding here, will add to ScrollView contentContainerStyle
+  },
+  scrollViewContent: {
+    padding: 16, // Add padding to the content inside ScrollView
+    flexGrow: 1, // Allow content to grow and enable scrolling
   },
   loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F5EDD8', // Match background
   },
-  contentCard: { // Replaces Surface for better control
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#6F4E37',
+  },
+  surface: {
     padding: 20,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF', // Ensure card is white
-    marginVertical: 20, // Vertical margin for the card
-    // Add subtle shadow
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2.22,
+    elevation: 4,
+    backgroundColor: '#FFFFFF',
+    // Removed marginVertical as padding is now on ScrollView content
   },
   iconContainer: {
     alignItems: 'center',
     marginBottom: 20,
   },
   title: {
-    fontSize: 26, // Slightly adjusted size
+    fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
-    color: '#333333', // Dark grey title
+    color: '#6F4E37',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
     textAlign: 'center',
-    color: '#555555', // Medium grey subtitle
-    marginBottom: 32, // Increased space
+    color: '#666666',
+    marginBottom: 24,
   },
   detailsContainer: {
     marginBottom: 24,
@@ -189,61 +323,46 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   detailIcon: {
-    marginRight: 16, // Increased icon spacing
-    color: '#6F4E37', // Accent color for icons
+    marginRight: 12,
   },
   detailText: {
     flex: 1,
   },
   detailLabel: {
     fontSize: 14,
-    color: '#888888', // Lighter grey label
-    marginBottom: 2, // Space between label and value
+    color: '#666666',
   },
   detailValue: {
     fontSize: 16,
-    color: '#333333', // Dark grey value
+    color: '#000000',
     fontWeight: '500',
   },
-  primaryButton: { // Primary button style
-    marginTop: 24, // Space above button
+  button: {
+    marginTop: 16,
     backgroundColor: '#6F4E37',
-    borderRadius: 12,
-    paddingVertical: 8, // Adjust padding for react-native-paper Button
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-  },
-  primaryButtonText: {
-      fontSize: 16,
-      color: '#FFFFFF', // White text
-      fontWeight: 'bold',
   },
   orderItemsContainer: {
     marginTop: 24,
     borderTopWidth: 1,
-    borderTopColor: '#EEEEEE', // Lighter separator
+    borderTopColor: '#E0E0E0',
     paddingTop: 16,
   },
   orderItemsTitle: {
     fontSize: 18,
-    fontWeight: '600', // Semi-bold
-    color: '#333333', // Dark grey title
+    fontWeight: 'bold',
+    color: '#6F4E37',
     marginBottom: 12,
   },
   orderItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10, // Adjusted padding
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5', // Very light separator
+    borderBottomColor: '#F0F0F0',
   },
   orderItemInfo: {
     flex: 1,
-    marginRight: 10, // Space before price
   },
   orderItemName: {
     fontSize: 16,
@@ -251,23 +370,15 @@ const styles = StyleSheet.create({
   },
   orderItemQuantity: {
     fontSize: 14,
-    color: '#888888',
-    marginTop: 2,
+    color: '#666666',
+    marginTop: 4,
   },
   orderItemPrice: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333333',
-  },
-  errorText: {
-      textAlign: 'center',
-      fontSize: 16,
-      color: '#D32F2F', // Error color
-      marginBottom: 16,
-  },
-  errorButton: {
-      borderColor: '#6F4E37', // Accent color border
+    color: '#6F4E37',
   },
 });
 
 export default SuccessScreen;
+

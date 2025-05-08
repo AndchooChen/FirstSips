@@ -168,33 +168,47 @@ const OrderQueue = ({ shopId }: { shopId: string }) => {
 
     useEffect(() => {
         let intervalId: any;
-      
+    
         const fetchOrders = async () => {
           const { data, error } = await supabase
             .from("orders")
-            .select("*")
+            // --- MODIFIED SELECT STATEMENT ---
+            .select("*, order_items(*)")
+            // ---------------------------------
             .eq("shop_id", shopId)
             .in("status", ["pending", "accepted", "preparing", "completed"])
             .order("created_at", { ascending: true });
-      
+    
           if (!error && data) {
             const formattedOrders = data.map((order) => ({
               ...order,
-              orderId: order.id,
+              orderId: order.id, // Assuming orderId property matches Supabase 'id' column
               createdAt: new Date(order.created_at),
               pickupTime: order.pickup_time,
+              // --- MAP order_items TO items ---
+              // Supabase fetches related data into a property named after the foreign table
+              items: order.order_items || [], // Ensure it's an array, even if no items
+              // Make sure other properties expected by your Order type are present/mapped
+              // e.g., customerName, customerPhone, totalAmount - assuming these are on the 'orders' table
+              customerName: order.customer_name, // Adjust column names if needed
+              customerPhone: order.customer_phone,
+              totalAmount: order.total, // Adjust column names if needed
             })) as Order[];
-      
+    
             setOrders(formattedOrders);
             setLoading(false);
+          } else if (error) {
+            console.error("Error fetching orders:", error);
+            // Handle error, maybe show a message
+            setLoading(false); // Stop loading even on error
           }
         };
-      
+    
         fetchOrders();
-        intervalId = setInterval(fetchOrders, 10000);
-      
-        return () => clearInterval(intervalId);
-      }, [shopId]);
+        intervalId = setInterval(fetchOrders, 10000); // Poll every 10 seconds
+    
+        return () => clearInterval(intervalId); // Cleanup on unmount
+    }, [shopId]); // Dependency array includes shopId
       
 
     // Add to existing styles
@@ -245,7 +259,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 16,
-        backgroundColor: '#F5EDD8',
+        backgroundColor: '#FFFFFF',
     },
     title: {
         marginBottom: 16,

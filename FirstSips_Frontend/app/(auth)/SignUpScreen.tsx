@@ -17,7 +17,7 @@ const SignUpScreen = () => {
     const [loading, setLoading] = useState(false);
     const [passwordVisible, setPasswordVisible] = useState(false);
     const params = useLocalSearchParams();
-    const isShopOwner = params.isShopOwner === 'true';
+    const isShopOwner = false
     const router = useRouter();
 
     const handleSignUp = async () => {

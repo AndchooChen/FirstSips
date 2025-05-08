@@ -1,214 +1,272 @@
-import { View, StyleSheet, KeyboardAvoidingView, ScrollView, Platform, Text, TouchableOpacity, SafeAreaView } from "react-native";
-import { useState } from "react";
-import { TextInput } from 'react-native-paper'; // Assuming react-native-paper TextInput
-import { formatBirthday, formatPhoneNumber, validateForm } from "../utils/signUpUtils"; // Assuming these utility functions exist
-import ScreenWideButton from "../components/ScreenWideButton"; // Assuming this component exists
-import { useLocalSearchParams, useRouter } from "expo-router"; // Assuming expo-router is used
-import { Ionicons } from '@expo/vector-icons'; // Assuming Ionicons are available
-import { supabase } from "../utils/supabase"; // Assuming Supabase client
-import { signUpWithEmail } from "../auth/auth"; // Assuming this auth function exists
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from "react-native";
+import { useState } from 'react';
+import { TextInput } from "react-native-paper";
+import { Ionicons } from "@expo/vector-icons";
+import ScreenWideButton from "../components/ScreenWideButton";
+import { useRouter } from "expo-router";
+import { supabase } from "../utils/supabase";
 
-const SignUpScreen = () => {
-    const [firstName, setFirstName] = useState("");
-    const [lastName, setLastName] = useState("");
-    const [phoneNumber, setPhoneNumber] = useState("");
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const params = useLocalSearchParams();
-    // Determine if the user is signing up as a shop owner based on the parameter
-    const isShopOwner = params.isShopOwner === 'true';
+export default function CreateShopScreen() {
+    const [shopName, setShopName] = useState("");
+    const [streetAddress, setStreetAddress] = useState("");
+    const [zipCode, setZipCode] = useState("");
+    const [city, setCity] = useState("");
+    const [state, setState] = useState("");
+    const [loading, setLoading] = useState(false);
 
     const router = useRouter();
 
-    // Function to handle the sign-up process
-    const handleSignUp = async () => {
-        // Validate the form inputs
-        if (!validateForm(firstName, lastName, email, password, phoneNumber)) {
-            // validateForm should ideally show specific error messages to the user
-            alert("Please fill in all fields correctly."); // Basic alert for now
+    const handleCreateShop = async () => {
+        if (!shopName || !streetAddress || !zipCode || !city || !state) {
+            Alert.alert("Missing Information", "Please fill in all shop and address details.");
             return;
         }
 
-        // Attempt to sign up with email and password
-        const { data, error } = await signUpWithEmail(email, password);
+        setLoading(true);
 
-        if (error) {
-            console.log('Sign up error:', error.message);
-            alert("Sign up failed: " + error.message); // Display sign-up error
-            return;
-        }
+        try {
+            const {
+                data: { user },
+                error: authError,
+            } = await supabase.auth.getUser();
 
-        const user = data?.user; // Get the newly created user
+            if (!user || authError) {
+                Alert.alert("Authentication Error", "No authenticated user found. Please log in again.");
+                setLoading(false);
+                return;
+            }
 
-        if (user) {
-            // Insert user profile into the 'users' table
-            const { error: insertError } = await supabase
-            .from('users')
-            .insert([
-                {
-                    id: user.id,
-                    email: email,
-                    first_name: firstName,
-                    last_name: lastName,
-                    phone_number: phoneNumber,
-                    is_shop_owner: isShopOwner, // Set is_shop_owner based on the selected type
-                    shop_id: null, // Shop ID is null initially for both types
-                }
-            ]);
+            const user_Id = user.id;
+
+            const { data: userData, error: userError } = await supabase
+                .from("users")
+                .select("is_shop_owner")
+                .eq("id", user_Id)
+                .single();
+
+            if (userError) {
+                console.error("Error checking user shop status:", userError);
+                Alert.alert("Database Error", "Failed to check your shop status.");
+                setLoading(false);
+                return;
+            }
+
+            if (userData?.is_shop_owner) {
+                Alert.alert("Already Own a Shop", "You already own a shop!");
+                setLoading(false);
+                router.push("/(tabs)/shop_owner/EditShopScreen");
+                return;
+            }
+
+            const { data: shopData, error: insertError } = await supabase
+                .from("shops")
+                .insert([
+                    {
+                        owner_id: user_Id,
+                        shop_name: shopName,
+                        description: "",
+                        street_address: streetAddress,
+                        city,
+                        state,
+                        zip: zipCode,
+                        status: false,
+                        created_at: new Date().toISOString(),
+                    },
+                ])
+                .select();
 
             if (insertError) {
-                console.log("Error inserting user profile: ", insertError.message);
-                alert("Failed to create user profile: " + insertError.message); // Display profile creation error
-                // Consider rolling back the auth creation if profile creation fails
+                console.error("Error inserting shop data:", insertError);
+                Alert.alert("Database Error", "Failed to create your shop.");
+                setLoading(false);
                 return;
-            } else {
-                console.log("User profile created");
             }
-        }
 
-        console.log("user created: ", user);
+            const CreatedShop = shopData?.[0];
 
-        // Navigate based on account type
-        if (isShopOwner) {
-            router.push("./CreateShopScreen"); // Navigate to create shop screen for shop owners
-        } else {
-            router.push("../(tabs)/dashboard/DashboardScreen"); // Navigate to dashboard for customers
+            if (!CreatedShop) {
+                console.error("Shop creation failed, no data returned.");
+                Alert.alert("Creation Failed", "Shop creation failed, please try again.");
+                setLoading(false);
+                return;
+            }
+
+            const { error: userUpdateError } = await supabase
+                .from("users")
+                .update({ shop_id: CreatedShop.id, is_shop_owner: true })
+                .eq("id", user_Id);
+
+            if (userUpdateError) {
+                console.error("Error updating user record:", userUpdateError);
+                Alert.alert("Database Error", "Failed to update your user profile.");
+                setLoading(false);
+                return;
+            }
+
+            Alert.alert("Success", "Shop created successfully!");
+            setLoading(false);
+            router.push("/(tabs)/shop_owner/EditShopScreen");
+
+        } catch (error: any) {
+            console.error("Unexpected error creating shop:", error);
+            Alert.alert("Error", error.message || "An unexpected error occurred while creating the shop.");
+            setLoading(false);
         }
     };
 
+
     return (
-        // KeyboardAvoidingView to prevent keyboard from covering inputs
-        <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"} // Adjust behavior based on platform
-            style={styles.safeArea} // Apply styles to the main container
-        >
-            {/* Back Button */}
-            <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.back()}
-                accessibilityLabel="Go back" // Accessibility label
-            >
-                <Ionicons name="arrow-back" size={24} color="#6F4E37" /> {/* Consistent back arrow color */}
-            </TouchableOpacity>
-            {/* ScrollView for content that might exceed screen height */}
-            <ScrollView
-                contentContainerStyle={styles.scrollContainer}
-                showsVerticalScrollIndicator={false} // Hide scroll indicator
-            >
-                {/* Title */}
-                <Text style={styles.titleText}>{isShopOwner ? "Create Your Shop Account" : "Create Your Customer Account"}</Text>
+        <SafeAreaView style={styles.safeArea}>
+            <ScrollView contentContainerStyle={styles.scrollViewContent}>
+                <View style={styles.container}>
+                    <View style={styles.header}>
+                        <TouchableOpacity
+                            onPress={() => router.back()}
+                            style={styles.backButton}
+                            accessibilityLabel="Go back"
+                        >
+                            <Ionicons name="arrow-back" size={24} color="#6F4E37"/>
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>Create Your Shop</Text>
+                    </View>
 
-                {/* Form Container */}
-                <View style={styles.formContainer}>
-                    {/* First Name Input */}
-                    <TextInput
-                        label = "First name"
-                        value = {firstName}
-                        onChangeText = {(firstName) => {setFirstName(firstName)}}
-                        mode = "outlined" // Outlined style
-                        style={styles.input}
-                    />
-                    {/* Last Name Input */}
-                    <TextInput
-                        label = "Last name"
-                        value = {lastName}
-                        onChangeText = {(lastName) => {setLastName(lastName)}}
-                        mode = "outlined" // Outlined style
-                        style={styles.input}
-                    />
-                    {/* Phone Number Input */}
-                    <TextInput
-                        label="Phone number"
-                        value={phoneNumber}
-                        onChangeText={(text) => setPhoneNumber(formatPhoneNumber(text))} // Format phone number
-                        mode="outlined" // Outlined style
-                        placeholder="(XXX)XXX-XXXX"
-                        keyboardType="numeric" // Numeric keyboard
-                        maxLength={14} // Limit input length
-                        style={styles.input}
-                    />
-                    {/* Email Input */}
-                    <TextInput
-                        label = "Email"
-                        value = {email}
-                        onChangeText = {(email) => {setEmail(email)}}
-                        mode = "outlined" // Outlined style
-                        keyboardType="email-address" // Suggest email keyboard
-                        autoCapitalize="none" // Prevent auto-capitalization
-                        style={styles.input}
-                    />
-                    {/* Password Input */}
-                    <TextInput
-                        label = "Password"
-                        value = {password}
-                        onChangeText = {(password) => {setPassword(password)}}
-                        mode = "outlined" // Outlined style
-                        secureTextEntry = {true} // Hide password
-                        style={styles.input}
-                    />
+                    <Text style={styles.sectionTitle}>Shop Details</Text>
+                    <View style={styles.formSection}>
+                        <TextInput
+                            style={styles.input}
+                            label="Shop Name"
+                            value={shopName}
+                            onChangeText={setShopName}
+                            mode="outlined"
+                            theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                            outlineColor="#CCCCCC"
+                            activeOutlineColor="#6F4E37"
+                        />
+                    </View>
 
-                    {/* Spacer */}
-                    <View style={{ height: 16 }}></View>
-
-                    {/* Sign Up Button */}
-                    <ScreenWideButton
-                        text={isShopOwner ? "Continue to Shop Details" : "Sign up"} // Button text changes based on account type
-                        onPress={handleSignUp} // Call sign-up function
-                        color="#D4A373" // Primary color
-                        textColor="#FFFFFF" // White text
-                    />
+                    <Text style={styles.sectionTitle}>Shop Address</Text>
+                    <View style={styles.formSection}>
+                        <TextInput
+                            label="Street Address"
+                            value={streetAddress}
+                            onChangeText={setStreetAddress}
+                            mode="outlined"
+                            style={styles.input}
+                            theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                            outlineColor="#CCCCCC"
+                            activeOutlineColor="#6F4E37"
+                        />
+                        <TextInput
+                            label="ZIP Code"
+                            value={zipCode}
+                            onChangeText={setZipCode}
+                            mode="outlined"
+                            style={styles.input}
+                            keyboardType="number-pad"
+                            theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                            outlineColor="#CCCCCC"
+                            activeOutlineColor="#6F4E37"
+                        />
+                        <TextInput
+                            label="City"
+                            value={city}
+                            onChangeText={setCity}
+                            mode="outlined"
+                            style={styles.input}
+                            theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                            outlineColor="#CCCCCC"
+                            activeOutlineColor="#6F4E37"
+                        />
+                        <TextInput
+                            label="State"
+                            value={state}
+                            onChangeText={setState}
+                            mode="outlined"
+                            style={styles.input}
+                            autoCapitalize="characters"
+                            maxLength={2}
+                            theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                            outlineColor="#CCCCCC"
+                            activeOutlineColor="#6F4E37"
+                        />
+                    </View>
+                    {loading ? (
+                       <ActivityIndicator size="large" color="#6F4E37" style={styles.loadingIndicator} />
+                    ) : (
+                       <View style={styles.buttonContainer}>
+                           <ScreenWideButton
+                                text="Create Shop"
+                                onPress={handleCreateShop}
+                                color="#6F4E37"
+                                textColor="#FFFFFF"
+                                style={styles.primaryButton}
+                                disabled={!shopName || !streetAddress || !zipCode || !city || !state}
+                           />
+                       </View>
+                    )}
                 </View>
             </ScrollView>
-        </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: "#F5EDD8", // Consistent background color
+        backgroundColor: "#FFFFFF",
     },
-    background: { // This style is redundant with safeArea
+    scrollViewContent: {
+        flexGrow: 1,
+        paddingBottom: 40,
+    },
+    container: {
         flex: 1,
-        backgroundColor: "#F5EDD8",
-        justifyContent:"center",
+        paddingHorizontal: 24,
+        paddingTop: 0, 
     },
-    scrollContainer: {
-        flexGrow: 1, // Allow content to grow
-        justifyContent: 'center', // Center content vertically
-        padding: 24, // Consistent padding
-        paddingTop: 80, // Padding at the top for back button
-    },
-    titleText: {
-        fontSize: 28, // Title font size
-        fontWeight: "bold", // Bold font weight
-        marginBottom: 32, // Space below title
-        textAlign: "center", // Center text
-        color: "#333", // Dark text color
-    },
-    formContainer: {
-        width: '100%', // Full width of scroll container
-        gap: 16, // Space between form elements
-        maxWidth: 400, // Optional: Limit max width
-        alignSelf: 'center', // Center the form container itself
-    },
-    switchContainer: { // This style is not used in the current component
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 8,
-    },
-    input: {
-        // marginBottom: 8, // Removed individual input margin, using gap in formContainer instead
-        backgroundColor: '#FFFFFF', // White background for inputs
+        marginBottom: 24,
+        paddingTop: 20,
     },
     backButton: {
-        position: 'absolute', // Absolute positioning
-        top: 40, // Position from top
-        left: 16, // Position from left
-        padding: 8, // Padding for touch area
-        zIndex: 1 // Ensure it's above other content
-    }
+        padding: 8,
+        marginRight: 16,
+    },
+    headerTitle: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#333333',
+    },
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 12,
+        marginTop: 16,
+        color: '#333333',
+    },
+    formSection: {
+        marginBottom: 24,
+        gap: 16,
+    },
+    input: {
+        backgroundColor: '#FFFFFF',
+    },
+    loadingIndicator: {
+        marginVertical: 20,
+    },
+    buttonContainer: {
+        marginTop: 24,
+        marginBottom: 40,
+    },
+    primaryButton: {
+        borderRadius: 12,
+        paddingVertical: 14,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
+    },
 });
-
-export default SignUpScreen;

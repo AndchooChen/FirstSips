@@ -4,13 +4,16 @@
     "slug": "Brewly",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/image/first_sips_coffee.png",
     "scheme": "firstsips",
     "deepLinks": [
       {
         "scheme": "firstsips",
         "prefix": "firstsips://",
-        "paths": ["stripe-success", "stripe-error"]
+        "paths": [
+          "stripe-success",
+          "stripe-error"
+        ]
       }
     ],
     "userInterfaceStyle": "automatic",
@@ -21,7 +24,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/image/first_sips_coffee.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.firstsips.app"
@@ -36,7 +39,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/image/first_sips_coffee.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -54,7 +57,9 @@
           "merchantIdentifier": "FirstSips",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

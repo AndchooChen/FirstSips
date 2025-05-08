@@ -1,37 +1,34 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, View, TouchableOpacity } from 'react-native';
-import { Appbar, Text } from 'react-native-paper'; // Using Paper's Appbar
-import OrderQueue from '../../components/OrderQueue'; // Assuming this component exists
+import { SafeAreaView, StyleSheet, View, TouchableOpacity, Text } from 'react-native';
+import OrderQueue from '../../components/OrderQueue';
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from '@expo/vector-icons'; // Import Ionicons
+import { Ionicons } from '@expo/vector-icons';
 
-const OrderManagementScreen = () => { // Renamed component for clarity
+const OrderManagementScreen = () => {
     const { shopId } = useLocalSearchParams();
     const router = useRouter();
 
-    // Ensure shopId is a string before passing to OrderQueue
     const shopIdString = typeof shopId === 'string' ? shopId : undefined;
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            {/* Custom Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#555555" />
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Go back">
+                    <Ionicons name="arrow-back" size={24} color="#6F4E37" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Order Queue</Text>
-                <View style={styles.headerSpacer} /> {/* For centering title */}
+                <View style={styles.headerSpacer} />
             </View>
 
-            {/* Render OrderQueue only if shopIdString is valid */}
-            {shopIdString ? (
-                <OrderQueue shopId={shopIdString} />
-            ) : (
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>Invalid Shop ID.</Text>
-                    {/* Optionally add a button to go back */}
-                </View>
-            )}
+            <View style={styles.contentContainer}>
+                {shopIdString ? (
+                    <OrderQueue shopId={shopIdString} />
+                ) : (
+                    <View style={styles.errorContainer}>
+                        <Text style={styles.errorText}>Invalid Shop ID.</Text>
+                    </View>
+                )}
+            </View>
         </SafeAreaView>
     );
 };
@@ -39,37 +36,36 @@ const OrderManagementScreen = () => { // Renamed component for clarity
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#F8F8F8', // Slightly off-white background
+        backgroundColor: '#FFFFFF',
     },
-    header: { // Custom header style
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: '#FFFFFF', // White header background
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEEEEE', // Light separator
-        // Add shadow for iOS if desired
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        // Add elevation for Android if desired
-        elevation: 2,
+        paddingHorizontal: 24,
+        paddingTop: 20,
+        marginBottom: 24,
     },
     backButton: {
-        padding: 8, // Touch area
+        padding: 8,
     },
     headerTitle: {
-        fontSize: 20,
-        fontWeight: '600', // Semi-bold
-        color: '#333333', // Dark grey title
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#333333',
+        flex: 1,
+        textAlign: 'center',
+        marginHorizontal: 8,
     },
     headerSpacer: {
-        width: 40, // Match back button touch area for centering
+        width: 40,
     },
-    errorContainer: { // Style for showing error if shopId is missing
+    contentContainer: {
+        flex: 1,
+        paddingHorizontal: 24,
+        backgroundColor: '#FFFFFF',
+    },
+    errorContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
@@ -77,9 +73,9 @@ const styles = StyleSheet.create({
     },
     errorText: {
         fontSize: 16,
-        color: '#D32F2F', // Error color
+        color: '#D32F2F',
         textAlign: 'center',
     },
 });
 
-export default OrderManagementScreen; // Export with the new name
+export default OrderManagementScreen;

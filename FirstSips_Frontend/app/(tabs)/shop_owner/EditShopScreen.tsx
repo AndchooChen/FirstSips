@@ -1,6 +1,6 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, SafeAreaView, ActivityIndicator, Alert, Platform } from 'react-native';
-import { useState, useEffect, useCallback } from 'react';
-import { TextInput, Portal, Modal, Switch } from 'react-native-paper'; // Added Switch
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { useState, useEffect } from 'react';
+import { TextInput, Portal, Modal } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenWideButton from '../../components/ScreenWideButton';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,547 +11,749 @@ interface ShopItem {
     id: string;
     name: string;
     price: number;
-    quantity: number; // -1 unlimited, -2 hidden
+    quantity: number;
     images?: string[];
     description?: string;
     shop_id: string;
 }
 
-interface ShopData {
-    id: string;
-    shop_name: string;
-    status: boolean;
-    profile_image: string | null;
-    stripe_account_id: string | null;
-    stripe_enabled: boolean;
-    payouts_enabled: boolean;
-    details_submitted: boolean;
-}
-
 export default function EditShopScreen() {
-    const [shopData, setShopData] = useState<ShopData | null>(null);
-    const [tempShopName, setTempShopName] = useState('');
-    const [tempProfileImage, setTempProfileImage] = useState<string | null>(null);
-    const [tempStatus, setTempStatus] = useState(false); // Temporary state for switch
+    const [shopName, setShopName] = useState("My Coffee Shop");
+    const [status, setStatus] = useState(false);
+    const [profileImage, setProfileImage] = useState<string | null>(null);
     const [showNameModal, setShowNameModal] = useState(false);
+    const [tempShopName, setTempShopName] = useState(shopName);
     const [items, setItems] = useState<ShopItem[]>([]);
+    const [stripeConnected, setStripeConnected] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
     const router = useRouter();
 
-    // Fetch Shop and Item Data
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const { data: { user }, error: authError } = await supabase.auth.getUser();
-            if (authError || !user) throw new Error("Not authenticated");
+    useEffect(() => {
+        let intervalId: NodeJS.Timeout;
+
+        const fetchShopData = async () => {
+            const {
+                data: { user },
+                error: authError,
+            } = await supabase.auth.getUser();
+
+            if (authError || !user) {
+                 console.error("Auth error fetching shop data:", authError);
+                 Alert.alert("Authentication Error", "Please log in again.");
+                 setLoading(false);
+                 return;
+            }
 
             const { data: userData, error: userError } = await supabase
-                .from("users").select("shop_id").eq("id", user.id).single();
-            if (userError || !userData?.shop_id) throw new Error("No shop found for this user");
+                .from("users")
+                .select("shop_id")
+                .eq("id", user.id)
+                .single();
 
-            const shopId = userData.shop_id;
+            if (userError || !userData?.shop_id) {
+                 console.error("Error fetching user shop_id:", userError);
+                 Alert.alert("Error", "Could not find shop associated with user.");
+                 setLoading(false);
+                 return;
+            }
 
-            // Fetch Shop Data
-            const { data: shopResult, error: shopError } = await supabase
-                .from("shops").select("*").eq("id", shopId).single();
-            if (shopError) throw shopError;
+            const { data: shopData, error: shopError } = await supabase
+                .from("shops")
+                .select("*")
+                .eq("id", userData.shop_id)
+                .single();
 
-            setShopData(shopResult as ShopData);
-            setTempShopName(shopResult.shop_name || '');
-            setTempProfileImage(shopResult.profile_image || null);
-            setTempStatus(shopResult.status || false);
+            if (shopError) {
+                 console.error("Error fetching shop data:", shopError);
+                 Alert.alert("Error", "Failed to load shop data.");
+                 setLoading(false); 
+                 return;
+            }
 
-            // Fetch Items
-            const { data: itemsData, error: itemsError } = await supabase
-                .from("items").select("*").eq("shop_id", shopId).order('created_at', { ascending: false });
-            if (itemsError) throw itemsError;
-            setItems(itemsData as ShopItem[]);
+            if (shopData) {
+                setShopName(shopData.shop_name || "My Coffee Shop");
+                setTempShopName(shopData.shop_name || "My Coffee Shop");
+                setStatus(shopData.status || false);
+                setProfileImage(shopData.profile_image || null);
+                setStripeConnected(shopData.stripe_account_id ? true : false);
+            }
+        };
 
-        } catch (error: any) {
-            console.error("Error fetching data:", error);
-            Alert.alert("Error", error.message || "Could not load shop data.");
-            // Optionally navigate back or show retry option
-        } finally {
-            setLoading(false);
+        const fetchItems = async () => {
+             const {
+                data: { user },
+                error: authError,
+            } = await supabase.auth.getUser();
+
+            if (authError || !user) {
+                 console.error("Auth error fetching items:", authError);
+                 return;
+            }
+
+            const { data: userData, error: userError } = await supabase
+                .from("users")
+                .select("shop_id")
+                .eq("id", user.id)
+                .single();
+
+            if (userError || !userData?.shop_id) {
+                 console.error("Error fetching user shop_id for items:", userError);
+                 return;
+            }
+
+            const fetch = async () => {
+                const { data: itemsData, error: itemsError } = await supabase
+                    .from("items")
+                    .select("*")
+                    .eq("shop_id", userData.shop_id);
+
+                if (itemsError) {
+                    console.error("Error fetching items:", itemsError);
+                    Alert.alert("Error", "Failed to load shop items.");
+                } else {
+                    setItems(itemsData || []);
+                }
+            };
+
+            await fetch();
+
+            intervalId = setInterval(fetch, 10000);
+        };
+
+        const loadInitialData = async () => {
+             setLoading(true);
+             await fetchShopData();
+             await fetchItems();
+             setLoading(false);
         }
+
+        loadInitialData();
+
+        return () => clearInterval(intervalId);
     }, []);
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    // Image Picker
     const pickImage = async () => {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') { Alert.alert('Permission Required', 'Camera roll access needed.'); return; }
-
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true,
-            aspect: [1, 1], quality: 0.8,
+            mediaTypes: ImagePicker.MediaTypeOptions.Images as any,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 1,
         });
 
         if (!result.canceled && result.assets && result.assets.length > 0) {
-            setTempProfileImage(result.assets[0].uri);
-            // TODO: Implement image upload logic here if storing in Supabase Storage
-            // For now, just updating local state
+            setProfileImage(result.assets[0].uri);
+            Alert.alert("Image Selected", "Image selected. Remember to save changes to update profile picture.");
+        } else if (!result.canceled) {
+             console.log("Image picking cancelled.");
+        } else {
+             console.log("Image picking failed or no assets returned.");
         }
     };
 
-    // Navigation Handlers
-    const handleHomePress = () => router.push("/(tabs)/dashboard/DashboardScreen");
-    const handleOrderQueuePress = () => {
-        if (shopData?.id) {
-            router.push({ pathname: "/(tabs)/shop_owner/OrderManagementScreen", params: { shopId: shopData.id } });
-        }
+    const handleHomePress = () => {
+        router.push("/(tabs)/dashboard/DashboardScreen");
     };
-    const handleAddProduct = () => router.push("/(tabs)/shop_owner/AddItemScreen");
-    const handleEditItem = (itemId: string) => {
-        if (shopData?.id) {
-            router.push({ pathname: "/(tabs)/shop_owner/EditItemScreen", params: { shopId: shopData.id, itemId: itemId } });
-        }
-    };
-    const handleStripeConnect = () => router.push("/(auth)/StripeConnectScreen");
 
-    // Delete Item
+    const handleOrderQueuePress = async () => {
+        const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError || !user) {
+            Alert.alert("Authentication Required", "Please log in to view orders.");
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from("users")
+            .select("shop_id")
+            .eq("id", user.id)
+            .single();
+
+        if (error || !data?.shop_id) {
+            Alert.alert("Shop Not Found", "Shop not found for your account.");
+            return;
+        }
+
+        router.push({
+            pathname: "/(tabs)/shop_owner/OrderManagementScreen",
+            params: { shopId: data.shop_id },
+        });
+    };
+
+    const handleAddProduct = async () => {
+         const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError || !user) {
+            Alert.alert("Authentication Required", "Please log in to add items.");
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from("users")
+            .select("shop_id")
+            .eq("id", user.id)
+            .single();
+
+        if (error || !data?.shop_id) {
+            Alert.alert("Create Shop First", "Please create a shop before adding items.");
+            router.push("../../(auth)/CreateShopScreen");
+            return;
+        }
+
+        router.push({
+            pathname: "/(tabs)/shop_owner/AddItemScreen",
+            params: { shopId: data.shop_id },
+        });
+    };
+
     const handleDeleteItem = async (itemId: string) => {
-        Alert.alert("Confirm Deletion", "Delete this item permanently?", [
-            { text: "Cancel", style: "cancel" },
-            {
-                text: "Delete", style: "destructive",
-                onPress: async () => {
-                    try {
-                        const { error } = await supabase.from("items").delete().eq("id", itemId).eq("shop_id", shopData?.id);
-                        if (error) throw error;
-                        setItems(prevItems => prevItems.filter(item => item.id !== itemId)); // Update UI immediately
-                        Alert.alert("Success", "Item deleted.");
-                    } catch (error: any) {
-                        console.error("Error deleting item:", error);
-                        Alert.alert("Error", "Failed to delete item.");
+        Alert.alert(
+            "Confirm Deletion",
+            "Are you sure you want to delete this item?",
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel"
+                },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                         const {
+                            data: { user },
+                            error: authError,
+                        } = await supabase.auth.getUser();
+
+                        if (authError || !user) {
+                            Alert.alert("Authentication Required", "Please log in to delete items.");
+                            return;
+                        }
+
+                        const { data, error } = await supabase
+                            .from("users")
+                            .select("shop_id")
+                            .eq("id", user.id)
+                            .single();
+
+                        if (error || !data?.shop_id) {
+                            Alert.alert("Shop Not Found", "Shop not found for your account.");
+                            return;
+                        }
+
+                        const { error: deleteError } = await supabase
+                            .from("items")
+                            .delete()
+                            .eq("id", itemId)
+                            .eq("shop_id", data.shop_id); // Ensure item belongs to the user's shop
+
+                        if (deleteError) {
+                            console.error("Error deleting item:", deleteError);
+                            Alert.alert("Deletion Failed", "Failed to delete item.");
+                        } else {
+                            Alert.alert("Success", "Item deleted successfully.");
+                            // Refresh the items list after deletion
+                            const updatedItems = items.filter(item => item.id !== itemId);
+                            setItems(updatedItems);
+                        }
                     }
                 }
-            }
-        ]);
+            ]
+        );
     };
 
-    // Save Changes
     const handleSaveChanges = async () => {
-        setSaving(true);
-        try {
-            if (!shopData?.id) throw new Error("Shop ID not found.");
-            if (!tempShopName.trim()) throw new Error("Shop name cannot be empty.");
+         const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser();
 
-            // TODO: Handle profile image upload if tempProfileImage is a local URI
-            const finalProfileImage = tempProfileImage; // Replace with uploaded URL if needed
+        if (authError || !user) {
+            Alert.alert("Authentication Required", "Please log in to save changes.");
+            return;
+        }
 
-            const { error } = await supabase
-                .from("shops")
-                .update({
-                    shop_name: tempShopName.trim(),
-                    status: tempStatus,
-                    profile_image: finalProfileImage,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq("id", shopData.id);
+        const { data, error } = await supabase
+            .from("users")
+            .select("shop_id")
+            .eq("id", user.id)
+            .single();
 
-            if (error) throw error;
+        if (error || !data?.shop_id) {
+            Alert.alert("Shop Not Found", "No shop found to save changes for.");
+            return;
+        }
 
-            // Update local state to reflect saved changes
-            setShopData(prev => prev ? { ...prev, shop_name: tempShopName.trim(), status: tempStatus, profile_image: finalProfileImage } : null);
+        const { error: updateError } = await supabase
+            .from("shops")
+            .update({
+                shop_name: shopName,
+                status: status,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", data.shop_id);
+
+        if (updateError) {
+            console.error("Error updating shop:", updateError);
+            Alert.alert("Update Failed", "Failed to update shop details.");
+        } else {
             Alert.alert("Success", "Shop updated successfully!");
-            // Optionally navigate away or just show success
-
-        } catch (error: any) {
-            console.error("Error updating shop:", error);
-            Alert.alert("Error", error.message || "Failed to update shop");
-        } finally {
-            setSaving(false);
         }
     };
 
-    // --- Render Logic ---
+    const handleSaveNameModal = () => {
+        if (tempShopName.trim() === "") {
+            Alert.alert("Invalid Name", "Shop name cannot be empty.");
+            return;
+        }
+        setShopName(tempShopName);
+        setShowNameModal(false);
+    };
 
-    if (loading) {
-        return (
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#6F4E37" />
-                </View>
-            </SafeAreaView>
-        );
-    }
-
-    if (!shopData) {
-        return (
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.loadingContainer}>
-                    <Text style={styles.errorText}>Could not load shop data.</Text>
-                    {/* Optionally add a retry button */}
-                </View>
-            </SafeAreaView>
-        );
-    }
-
-    const isStripeFullyEnabled = shopData.stripe_enabled && shopData.payouts_enabled && shopData.details_submitted;
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={handleHomePress} style={styles.headerButton}>
-                    <Ionicons name="home-outline" size={24} color="#555555" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Manage Shop</Text>
-                <View style={styles.headerButtonsContainer}>
-                    <TouchableOpacity onPress={handleStripeConnect} style={styles.headerButton}>
-                        <Ionicons name={isStripeFullyEnabled ? "card" : "card-outline"} size={24} color={isStripeFullyEnabled ? "#4CAF50" : "#D32F2F"} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleOrderQueuePress} style={styles.headerButton}>
-                        <Ionicons name="list-outline" size={24} color="#555555" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                {/* Profile Image & Name */}
-                <View style={styles.profileSection}>
-                    <TouchableOpacity style={styles.imageContainer} onPress={pickImage}>
-                        <Image
-                            source={tempProfileImage ? { uri: tempProfileImage } : require('../../assets/images/no_shop_image.png')}
-                            style={styles.profileImage}
-                        />
-                        <View style={styles.cameraIconOverlay}>
-                            <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
-                        </View>
-                    </TouchableOpacity>
-                    <View style={styles.nameContainer}>
-                        <Text style={styles.shopName}>{tempShopName}</Text>
-                        <TouchableOpacity onPress={() => setShowNameModal(true)}>
-                            <Ionicons name="pencil-outline" size={20} color="#555555" />
+            <ScrollView contentContainerStyle={styles.scrollViewContent}>
+                <View style={styles.container}>
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={handleHomePress} style={styles.headerButton} accessibilityLabel="Go to Dashboard">
+                            <Ionicons name="home-outline" size={24} color="#6F4E37" />
                         </TouchableOpacity>
-                    </View>
-                </View>
 
-                {/* Shop Status Toggle */}
-                <View style={styles.statusContainer}>
-                    <Text style={styles.statusLabel}>Shop Status:</Text>
-                    <View style={styles.switchRow}>
-                        <Text style={[styles.statusText, !tempStatus && styles.statusTextActive]}>Closed</Text>
-                        <Switch
-                            value={tempStatus}
-                            onValueChange={setTempStatus}
-                            color="#66BB6A" // Accent color for switch
-                            ios_backgroundColor="#E0E0E0"
-                        />
-                        <Text style={[styles.statusText, tempStatus && styles.statusTextActive]}>Open</Text>
-                    </View>
-                </View>
-
-                {/* Products List */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Products</Text>
-                    {items.length === 0 ? (
-                         <Text style={styles.emptyItemsText}>No products added yet.</Text>
-                    ) : (
-                        items.map((item) => (
-                            <View key={item.id} style={styles.productCardContainer}>
-                                <TouchableOpacity style={styles.productCard} onPress={() => handleEditItem(item.id)}>
-                                    <Image
-                                        source={item.images?.[0] ? { uri: item.images[0] } : require('../../assets/images/no_item_image.png')}
-                                        style={styles.productImage}
+                        <Text style={styles.headerTitle}>Edit Shop</Text>
+                        <View style={styles.headerButtonsContainer}>
+                            <TouchableOpacity
+                                onPress={() => router.push("/(auth)/StripeConnectScreen")}
+                                style={[styles.headerButton, styles.stripeButton]}
+                                accessibilityLabel="Manage Payments"
+                            >
+                                <View style={styles.headerButtonContent}>
+                                    <Ionicons
+                                        name={stripeConnected ? "card" : "card-outline"}
+                                        size={24}
+                                        color={stripeConnected ? "#4CAF50" : "#6F4E37"}
                                     />
-                                    <View style={styles.productInfo}>
-                                        <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
-                                        <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
-                                        <Text style={styles.quantityText}>
-                                            {item.quantity === -1 ? 'Unlimited' : item.quantity === -2 ? 'Hidden' : `Stock: ${item.quantity}`}
-                                        </Text>
+                                    <Text style={[styles.headerButtonText, stripeConnected && styles.stripeConnectedText]}>
+                                        Payments
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleOrderQueuePress} style={styles.headerButton} accessibilityLabel="View Orders">
+                                <View style={styles.headerButtonContent}>
+                                    <Ionicons name="list-outline" size={24} color="#6F4E37" />
+                                    <Text style={styles.headerButtonText}>Orders</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {loading ? (
+                         <ActivityIndicator size="large" color="#6F4E37" style={styles.loadingIndicator} />
+                    ) : (
+                        <>
+                            <TouchableOpacity style={styles.imageContainer} onPress={pickImage} accessibilityLabel="Change Profile Image">
+                                {profileImage ? (
+                                    <Image source={{ uri: profileImage }} style={styles.profileImage} />
+                                ) : (
+                                    <View style={styles.imagePlaceholder}>
+                                        <Ionicons name="camera-outline" size={40} color="#6F4E37" />
                                     </View>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteItem(item.id)}>
-                                    <Ionicons name="trash-outline" size={22} color="#D32F2F" />
+                                )}
+                            </TouchableOpacity>
+
+                            <View style={styles.nameContainer}>
+                                <Text style={styles.shopName}>{shopName}</Text>
+                                <TouchableOpacity onPress={() => {
+                                     setTempShopName(shopName);
+                                     setShowNameModal(true);
+                                }} accessibilityLabel="Edit Shop Name">
+                                    <Ionicons name="pencil-outline" size={24} color="#6F4E37" />
                                 </TouchableOpacity>
                             </View>
-                        ))
-                    )}
-                    {/* Add Product Button */}
-                    <TouchableOpacity style={styles.addProductButton} onPress={handleAddProduct}>
-                        <Ionicons name="add-circle-outline" size={24} color="#6F4E37" />
-                        <Text style={styles.addProductText}>Add New Product</Text>
-                    </TouchableOpacity>
-                </View>
 
-                {/* Save Changes Button */}
-                <ScreenWideButton
-                    text="Save Shop Changes"
-                    onPress={handleSaveChanges}
-                    color="#6F4E37"
-                    textColor="#FFFFFF"
-                    style={styles.primaryButton}
-                    disabled={saving}
-                    loading={saving}
-                />
+                            <TouchableOpacity
+                                style={[styles.statusButton, status ? styles.openButton : styles.closedButton]}
+                                onPress={() => setStatus(!status)}
+                                accessibilityLabel={status ? 'Toggle shop status to Closed' : 'Toggle shop status to Open'}
+                            >
+                                <Text style={styles.statusButtonText}>
+                                    {status ? 'OPEN' : 'CLOSED'}
+                                </Text>
+                            </TouchableOpacity>
+
+                            <Text style={styles.sectionTitle}>Products</Text>
+                            <View style={styles.productsList}>
+                                {items.length === 0 ? (
+                                    <Text style={styles.emptyText}>No products added yet.</Text>
+                                ) : (
+                                    items.map((item) => (
+                                        <View key={item.id} style={styles.productCardContainer}>
+                                            <TouchableOpacity
+                                                style={styles.productCard}
+                                                onPress={() => router.push({
+                                                    pathname: "/(tabs)/shop_owner/EditItemScreen",
+                                                    params: { shopId: item.shop_id, itemId: item.id }
+                                                })}
+                                                accessibilityLabel={`Edit ${item.name}`}
+                                            >
+                                                <Image
+                                                    source={
+                                                        item.images?.[0]
+                                                            ? { uri: item.images[0] }
+                                                            : require('../../assets/images/no_item_image.png')
+                                                    }
+                                                    style={styles.productImage}
+                                                    defaultSource={require('../../assets/images/no_item_image.png')}
+                                                />
+                                                <View style={styles.productInfo}>
+                                                    <Text style={styles.productName}>{item.name}</Text>
+                                                    <Text style={styles.productPrice}>${item.price ? item.price.toFixed(2) : '0.00'}</Text>
+                                                    <View style={styles.quantityInfo}>
+                                                        <Text style={styles.quantityText}>In stock: {item.quantity !== undefined && item.quantity !== null ? item.quantity : 'Unlimited'}</Text>
+                                                    </View>
+                                                </View>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={styles.deleteButton}
+                                                onPress={() => handleDeleteItem(item.id)}
+                                                accessibilityLabel={`Delete ${item.name}`}
+                                            >
+                                                <Ionicons name="trash-outline" size={24} color="#FF6B6B" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))
+                                )}
+                            </View>
+
+                            <TouchableOpacity style={styles.addProductButton} onPress={handleAddProduct} accessibilityLabel="Add New Product">
+                                <Ionicons name="add-circle" size={32} color="#6F4E37" />
+                                <Text style={styles.addProductText}>Add New Product</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
+                </View>
             </ScrollView>
 
-            {/* Shop Name Edit Modal */}
             <Portal>
-                <Modal visible={showNameModal} onDismiss={() => setShowNameModal(false)} contentContainerStyle={styles.modalContainer}>
-                    <Text style={styles.modalTitle}>Edit Shop Name</Text>
+                <Modal
+                    visible={showNameModal}
+                    onDismiss={() => setShowNameModal(false)}
+                    contentContainerStyle={styles.modalContainer}
+                >
+                    <Text style={styles.modalTitle}>Edit Shop Name</Text> {/* Add modal title */}
                     <TextInput
                         label="Shop Name"
                         value={tempShopName}
                         onChangeText={setTempShopName}
                         mode="outlined"
                         style={styles.modalInput}
-                        theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
-                        outlineColor="#CCCCCC" activeOutlineColor="#6F4E37"
+                        theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }} // Consistent theme
+                        outlineColor="#CCCCCC" // Consistent softer outline color
+                        activeOutlineColor="#6F4E37" // Consistent accent color when active
                     />
-                    <View style={styles.modalButtonContainer}>
-                         <ScreenWideButton text="Cancel" onPress={() => { setTempShopName(shopData?.shop_name || ''); setShowNameModal(false); }} color="#FFFFFF" textColor="#555555" style={styles.secondaryButton} />
-                         <ScreenWideButton text="Save" onPress={() => setShowNameModal(false)} color="#6F4E37" textColor="#FFFFFF" style={styles.primaryButtonModal} />
-                    </View>
+                    <ScreenWideButton
+                        text="Save Name" // More descriptive button text
+                        onPress={handleSaveNameModal}
+                        color="#6F4E37" // Consistent primary button color
+                        textColor="#FFFFFF" // Consistent white text
+                        style={styles.primaryButton} // Apply primary button styles
+                         disabled={tempShopName.trim() === ""} // Disable if name is empty
+                    />
                 </Modal>
             </Portal>
+
+            {/* Save Changes Button (Fixed at the bottom) */}
+            {/* Only show save button when not loading */}
+            {!loading && (
+                <View style={styles.saveButtonContainer}>
+                    <ScreenWideButton
+                        text="Confirm Edits"
+                        onPress={handleSaveChanges}
+                        color="#6F4E37" // Consistent primary button color
+                        textColor="#FFFFFF" // Consistent white text
+                        style={styles.primaryButton} // Apply primary button styles
+                    />
+                </View>
+            )}
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
+    // Safe Area style for full screen coverage and consistent background
     safeArea: {
         flex: 1,
-        backgroundColor: '#FFFFFF', // White background
+        backgroundColor: "#FFFFFF", // Consistent white background
     },
-    loadingContainer: {
+    // ScrollView content container style to allow padding at the bottom
+    scrollViewContent: {
+        flexGrow: 1, // Allow content to grow
+        paddingBottom: 100, // Add extra padding at the bottom to prevent save button from covering content
+    },
+    // Main Container with consistent horizontal padding
+    container: {
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 24, // Consistent horizontal padding
+        paddingTop: 0, // Adjust top padding as header has its own
     },
-    errorText: {
-        color: '#D32F2F',
-        fontSize: 16,
-    },
-    scrollView: {
-        flex: 1,
-    },
+    // Header container for navigation and title
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEEEEE',
+        flexDirection: 'row', // Arrange items horizontally
+        alignItems: 'center', // Align items vertically in the center
+        justifyContent: 'space-between', // Space out elements
+        marginBottom: 24, // Consistent space below header
+        paddingTop: 20, // Consistent padding at the top for status bar/notch
     },
+    // Header title text style
     headerTitle: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#333333',
+        fontSize: 28, // Consistent header title font size
+        fontWeight: 'bold', // Consistent bold font weight
+        color: '#333333', // Consistent dark text color for titles
+        flex: 1, // Allow title to take available space
+        textAlign: 'center', // Center title
+        marginHorizontal: 8, // Add horizontal margin to prevent overlap with buttons
     },
+    // Style for individual header buttons
     headerButton: {
-        padding: 8,
+        padding: 8, // Consistent padding for touch area
     },
+    // Container for the right-side header buttons
     headerButtonsContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8, // Space between header buttons
+        flexDirection: 'row', // Arrange buttons horizontally
+        alignItems: 'center', // Align buttons vertically
     },
-    profileSection: {
-        alignItems: 'center',
-        paddingVertical: 24,
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEEEEE',
+    // Style for the content inside header buttons (icon and text)
+    headerButtonContent: {
+        flexDirection: 'column', // Stack icon and text vertically
+        alignItems: 'center', // Center icon and text horizontally
+        justifyContent: 'center', // Center icon and text vertically
     },
+    // Style for the text inside header buttons
+    headerButtonText: {
+        fontSize: 10, // Smaller font size for button text
+        marginTop: 2, // Space between icon and text
+        color: '#6F4E37', // Consistent accent color for button text
+    },
+    // Style for the text when Stripe is connected
+    stripeConnectedText: {
+        color: '#4CAF50', // Green color for connected status
+    },
+    // Style for the Stripe button (adds right margin)
+    stripeButton: {
+        marginRight: 8, // Space between Stripe and Orders buttons
+    },
+    // Loading indicator style
+    loadingIndicator: {
+        marginVertical: 40, // Add vertical margin around the indicator
+    },
+    // Container for the profile image section
     imageContainer: {
-        position: 'relative', // For camera icon overlay
+        alignItems: 'center', // Center the image horizontally
+        marginTop: 16, // Consistent spacing above the image
+        marginBottom: 24, // Consistent spacing below the image
     },
+    // Style for the displayed profile image
     profileImage: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#F0F0F0',
+        width: 120, // Consistent size
+        height: 120, // Consistent size
+        borderRadius: 60, // Make it circular
+        borderWidth: 2, // Add a border
+        borderColor: '#6F4E37', // Consistent accent color border
     },
-    cameraIconOverlay: {
-        position: 'absolute',
-        bottom: 0,
-        right: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        padding: 6,
-        borderRadius: 15,
+    // Style for the image placeholder when no image is set
+    imagePlaceholder: {
+        width: 120, // Consistent size
+        height: 120, // Consistent size
+        borderRadius: 60, // Make it circular
+        backgroundColor: '#FFFFFF', // Consistent white background
+        justifyContent: 'center', // Center content vertically
+        alignItems: 'center', // Center content horizontally
+        borderWidth: 2, // Add a border
+        borderColor: '#6F4E37', // Consistent accent color border
     },
+    // Container for the shop name and edit button
     nameContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 16,
-        gap: 8,
+        flexDirection: 'row', // Arrange items horizontally
+        alignItems: 'center', // Align items vertically in the center
+        justifyContent: 'center', // Center the name and button horizontally
+        marginBottom: 24, // Consistent spacing below the name section
+        gap: 8, // Consistent space between name and edit button
     },
+    // Style for the displayed shop name
     shopName: {
-        fontSize: 22, // Slightly smaller
-        fontWeight: 'bold',
-        color: '#333333',
+        fontSize: 24, // Consistent font size for shop name
+        fontWeight: 'bold', // Consistent bold weight
+        color: '#333333', // Consistent dark text color
     },
-    statusContainer: {
-        paddingHorizontal: 16,
-        paddingVertical: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEEEEE',
+    // Style for the shop status toggle button
+    statusButton: {
+        alignItems: 'center', // Center text horizontally
+        justifyContent: 'center', // Center text vertically
+        paddingVertical: 14, // Consistent vertical padding (matching primary button)
+        borderRadius: 12, // Consistent border radius (matching primary button)
+        marginBottom: 24, // Consistent spacing below the status button
+        width: '100%', // Take full width
     },
-    statusLabel: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: '#555555',
-        marginBottom: 12,
-        textAlign: 'center',
+    // Background color for the OPEN status button
+    openButton: {
+        backgroundColor: '#4CAF50', // Green color for open
     },
-    switchRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 12,
+    // Background color for the CLOSED status button
+    closedButton: {
+        backgroundColor: '#F44336', // Red color for closed
     },
-    statusText: {
-        fontSize: 14,
-        color: '#888888',
-        fontWeight: '500',
+    // Style for the text inside the status button
+    statusButtonText: {
+        fontSize: 18, // Consistent font size
+        fontWeight: 'bold', // Consistent bold weight
+        color: '#FFFFFF', // Consistent white text color
     },
-    statusTextActive: {
-        color: '#333333',
-        fontWeight: 'bold',
-    },
-    section: {
-        padding: 16,
-    },
+    // Style for section titles (e.g., "Products")
     sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333333',
-        marginBottom: 16,
+        fontSize: 20, // Consistent section title font size
+        fontWeight: 'bold', // Consistent bold weight
+        color: '#333333', // Consistent dark text color
+        marginTop: 16, // Consistent space above section title
+        marginBottom: 12, // Consistent space below section title
+        paddingHorizontal: 0, // Remove horizontal padding from here, handled by container
     },
+    // Container for the list of products
     productsList: {
-        gap: 12, // Space between product cards
+        marginTop: 0, // Adjusted margin top
+        gap: 12, // Consistent space between product cards
     },
+    // Container for an individual product card and delete button
     productCardContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#EEEEEE',
-        overflow: 'hidden', // Ensure delete button doesn't overflow weirdly
+        flexDirection: 'row', // Arrange card and delete button horizontally
+        alignItems: 'center', // Align items vertically
+        // marginBottom: 8, // Removed, using gap in productsList instead
     },
+    // Style for an individual product card (touchable area)
     productCard: {
-        flex: 1, // Take available space
-        flexDirection: 'row',
-        padding: 12,
-        alignItems: 'center',
+        flex: 1, // Allow card to take available space
+        flexDirection: 'row', // Arrange image and info horizontally
+        backgroundColor: '#FFFFFF', // Consistent white background
+        borderRadius: 8, // Consistent border radius
+        padding: 12, // Consistent padding inside the card
+        alignItems: 'center', // Align items vertically within the card
+        elevation: 1, // Add subtle shadow
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 0.5 },
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
     },
-    productImage: {
-        width: 50, // Smaller image
-        height: 50,
-        borderRadius: 8,
-        marginRight: 12,
-        backgroundColor: '#F0F0F0',
-    },
-    productInfo: {
-        flex: 1, // Allow text to take space
-    },
-    productName: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: '#333333',
-        marginBottom: 2,
-    },
-    productPrice: {
-        fontSize: 14,
-        color: '#555555',
-        marginBottom: 2,
-    },
-    quantityText: {
-        fontSize: 12,
-        color: '#888888',
-    },
+    // Style for the delete button next to the product card
     deleteButton: {
-        paddingHorizontal: 16, // Increase touch area
-        paddingVertical: 20, // Match card height roughly
-        alignSelf: 'stretch', // Make it fill height
-        justifyContent: 'center',
-        borderLeftWidth: 1,
-        borderLeftColor: '#EEEEEE',
+        padding: 10, // Consistent padding for touch area
+        marginLeft: 8, // Space between card and delete button
     },
+    // Container for quantity information
+    quantityInfo: {
+        marginTop: 4, // Space above quantity text
+    },
+    // Style for quantity text
+    quantityText: {
+        fontSize: 12, // Smaller font size
+        color: '#555555', // Consistent gray text color
+    },
+    // Style for product images within cards
+    productImage: {
+        width: 60, // Consistent size
+        height: 60, // Consistent size
+        borderRadius: 4, // Slightly rounded corners
+        marginRight: 12, // Space between image and product info
+        backgroundColor: '#EEEEEE', // Placeholder background
+    },
+    // Container for product name and price
+    productInfo: {
+        flex: 1, // Allow product info to take available space
+    },
+    // Style for product name text
+    productName: {
+        fontSize: 16, // Consistent font size
+        fontWeight: '500', // Semi-bold weight
+        color: '#333333', // Consistent dark text color
+    },
+    // Style for product price text
+    productPrice: {
+        fontSize: 14, // Consistent font size
+        color: '#6F4E37', // Consistent accent color
+        marginTop: 4, // Space above price
+    },
+    // Style for the "Add New Product" button
     addProductButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#F8F8F8', // Light grey background
-        paddingVertical: 14,
-        borderRadius: 12,
-        marginTop: 16,
-        borderWidth: 1.5,
-        borderColor: '#E0E0E0',
-        borderStyle: 'dashed',
-        gap: 8,
+        flexDirection: 'row', // Arrange icon and text horizontally
+        alignItems: 'center', // Align items vertically
+        backgroundColor: '#FFFFFF', // Consistent white background
+        padding: 16, // Consistent padding
+        borderRadius: 8, // Consistent border radius
+        marginTop: 24, // Consistent space above the button
+        justifyContent: 'center', // Center content horizontally
+        gap: 8, // Consistent space between icon and text
+        elevation: 1, // Add subtle shadow
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 0.5 },
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
     },
+    // Style for the text in the "Add New Product" button
     addProductText: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: '#6F4E37',
+        fontSize: 16, // Consistent font size
+        color: '#6F4E37', // Consistent accent color
+        fontWeight: '500', // Semi-bold weight
     },
-    emptyItemsText: {
-        textAlign: 'center',
-        color: '#888888',
-        fontSize: 16,
-        marginVertical: 20,
-    },
-    primaryButton: { // Save Changes Button
-        borderRadius: 12,
-        paddingVertical: 14,
-        margin: 16, // Add margin around the button
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1.41,
-    },
-    // Modal Styles
+    // Style for the modal container
     modalContainer: {
-        backgroundColor: 'white',
-        padding: 24,
-        marginHorizontal: 20, // Side margins
-        borderRadius: 16, // More rounded
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
+        backgroundColor: 'white', // White background
+        padding: 24, // Consistent padding
+        marginHorizontal: 24, // Consistent horizontal margin
+        borderRadius: 12, // Consistent border radius
+        gap: 16, // Consistent space between modal elements
     },
+    // Style for the modal title
     modalTitle: {
-        fontSize: 20,
-        fontWeight: '600',
-        marginBottom: 20,
-        textAlign: 'center',
-        color: '#333333',
+        fontSize: 20, // Consistent title font size
+        fontWeight: 'bold', // Consistent bold weight
+        color: '#333333', // Consistent dark text color
+        marginBottom: 8, // Space below title
+        textAlign: 'center', // Center the title
     },
+    // Style for the input field within the modal
     modalInput: {
-        backgroundColor: '#FFFFFF',
-        marginBottom: 24,
+        backgroundColor: '#FFFFFF', // Consistent white background
+        // Theming is applied inline
     },
-    modalButtonContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between', // Space out buttons
-        gap: 12, // Gap between buttons
+    // Container for the main "Confirm Edits" button at the bottom
+    saveButtonContainer: {
+        position: 'absolute', // Position absolutely
+        bottom: 0, // Align to the bottom
+        left: 0, // Align to the left
+        right: 0, // Align to the right
+        paddingHorizontal: 24, // Consistent horizontal padding
+        paddingBottom: 20, // Add padding at the very bottom
+        backgroundColor: '#FFFFFF', // Match background for seamless look
+        borderTopWidth: 1, // Add a subtle border at the top
+        borderColor: '#EEEEEE', // Light border color
     },
-    primaryButtonModal: { // Style for modal primary button
-        flex: 1, // Allow buttons to share space
-        borderRadius: 12,
-        paddingVertical: 6, // Smaller padding for modal buttons
+     // Primary button styles (replicated from the guide and other screens)
+    primaryButton: {
+        borderRadius: 12, // Consistent border radius
+        paddingVertical: 14, // Consistent vertical padding
+        elevation: 2, // Consistent shadow for Android
+        shadowColor: '#000', // Consistent shadow color
+        shadowOffset: { width: 0, height: 1 }, // Consistent shadow offset
+        shadowOpacity: 0.2, // Consistent shadow opacity
+        shadowRadius: 1.41, // Consistent shadow radius
+        // Assuming ScreenWideButton handles width: "100%" or similar internally
     },
-    secondaryButton: { // Style for modal secondary button
-        flex: 1,
-        borderRadius: 12,
-        paddingVertical: 14, // Match ScreenWideButton default
-        borderWidth: 1.5,
-        borderColor: "#CCCCCC", // Lighter border for cancel
+    // Style for empty state text
+    emptyText: {
+        textAlign: 'center', // Center empty state text
+        color: '#555555', // Consistent gray text color
+        marginTop: 8, // Add spacing above empty text
     },
 });
