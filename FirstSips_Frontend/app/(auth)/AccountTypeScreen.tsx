@@ -1,62 +1,105 @@
-import { View, StyleSheet, TouchableOpacity, Text } from 'react-native'
-import { useRouter, useLocalSearchParams } from 'expo-router'
+import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView } from 'react-native';
+import { useRouter } from 'expo-router';
 import ScreenWideButton from '../components/ScreenWideButton';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
 
 const AccountTypeScreen = () => {
     const router = useRouter();
-    const params = useLocalSearchParams();
 
-    const handleShopPress = (isShopOwner: boolean) => {
+    const handleAccountTypeSelect = (isShopOwner: boolean) => {
         router.push({
             pathname: "./SignUpScreen",
-            params: { isShopOwner }
         });
     };
-    
-    return (
-        <View style={styles.background}>
-            <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.back()}
-            >
-                <Ionicons name="arrow-back" size={24} color="#6F4E37" />
-            </TouchableOpacity>
 
-            <View style={{width: "85%", alignItems: "center"}}>
-                <Text style={{marginBottom: 20, fontSize: 30, fontWeight: 500}}>Select an account type</Text>
-                <ScreenWideButton
-                    text="Shopowner"
-                    onPress={() => handleShopPress(true)}
-                    color="#D4A373"
-                    textColor="#000000"
-                />
-                <View style={{padding: 10}}></View>
-                <ScreenWideButton
-                    text="Customer"
-                    onPress={() => handleShopPress(false)}
-                    color="#D4A373"
-                    textColor="#000000"
-                />
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            <View style={styles.container}>
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => router.back()}
+                    accessibilityLabel="Go back"
+                >
+                    <Ionicons name="arrow-back" size={24} color="#555555" />
+                </TouchableOpacity>
+
+                <View style={styles.contentContainer}>
+                    <Text style={styles.titleText}>How will you use FirstSips?</Text>
+                    <Text style={styles.subtitleText}>Select your account type below.</Text>
+
+                    <ScreenWideButton
+                        text="I want to sell coffee (Shop Owner)"
+                        onPress={() => handleAccountTypeSelect(true)}
+                        color="#6F4E37"
+                        textColor="#FFFFFF"
+                        style={styles.primaryButton}
+                    />
+
+                    <ScreenWideButton
+                        text="I want to buy coffee (Customer)"
+                        onPress={() => handleAccountTypeSelect(false)}
+                        color="#FFFFFF"
+                        textColor="#6F4E37"
+                        style={styles.secondaryButton}
+                    />
+                </View>
             </View>
-        </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    background: {
+    safeArea: {
         flex: 1,
-        backgroundColor: "#F5EDD8",
+        backgroundColor: "#FFFFFF",
+    },
+    container: {
+        flex: 1,
         alignItems: "center",
         justifyContent: "center",
+        paddingHorizontal: 24,
+        paddingBottom: 40,
     },
     backButton: {
         position: 'absolute',
-        top: 40,
+        top: 50,
         left: 16,
         padding: 8,
         zIndex: 1,
+    },
+    contentContainer: {
+        width: "100%",
+        alignItems: "center",
+        maxWidth: 400,
+        gap: 20, 
+    },
+    titleText: {
+        fontSize: 28,
+        fontWeight: "bold",
+        textAlign: "center",
+        color: "#333333",
+        marginBottom: 8,
+    },
+    subtitleText: {
+        fontSize: 16,
+        textAlign: "center",
+        color: "#555555",
+        marginBottom: 32,
+    },
+    primaryButton: {
+        borderRadius: 12,
+        paddingVertical: 14,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
+    },
+    secondaryButton: {
+        borderRadius: 12,
+        paddingVertical: 14,
+        borderWidth: 1.5,
+        borderColor: "#6F4E37",
     },
 });
 

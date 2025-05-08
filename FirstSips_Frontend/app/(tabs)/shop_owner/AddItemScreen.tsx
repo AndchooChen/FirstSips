@@ -3,14 +3,13 @@ import { useState } from 'react';
 import { TextInput, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { FIREBASE_DB, FIREBASE_AUTH } from '../../auth/FirebaseConfig';
-import { doc, collection, setDoc, getDoc } from 'firebase/firestore';
+import { supabase } from '@/app/utils/supabase';
 import { useRouter } from 'expo-router';
 import ScreenWideButton from '../../components/ScreenWideButton';
+import { Alert } from 'react-native'; // Use Alert for user feedback
 
 const AddItemScreen = () => {
     const [name, setName] = useState('');
-    const [category, setCategory] = useState('');
     const [description, setDescription] = useState('');
     const [price, setPrice] = useState('');
     const [quantity, setQuantity] = useState('');
@@ -28,8 +27,12 @@ const AddItemScreen = () => {
             quality: 1,
         });
 
-        if (!result.canceled) {
+        if (!result.canceled && result.assets && result.assets.length > 0) {
             setImages([...images, result.assets[0].uri]);
+        } else if (!result.canceled) {
+             console.log("Image picking cancelled.");
+        } else {
+             console.log("Image picking failed or no assets returned.");
         }
     };
 
@@ -48,7 +51,6 @@ const AddItemScreen = () => {
     };
 
     const handleQuantityChange = (text: string) => {
-        // Only allow numbers
         if (/^\d*$/.test(text)) {
             setQuantity(text);
         }
@@ -72,243 +74,275 @@ const AddItemScreen = () => {
 
     const handleAddItem = async () => {
         try {
-            // Validate inputs
-            if (!name || !category || !description || !price) {
-                alert('Please fill in all required fields');
-                return;
-            }
+          if (!name || !description || !price) {
+            Alert.alert("Missing Information", "Please fill in all required fields: Name, Description, and Price.");
+            return;
+          }
 
-            if (!isUnlimited && !isHidden && !quantity) {
-                alert('Please specify a quantity or select Unlimited/Hidden');
-                return;
-            }
+          if (!isUnlimited && !isHidden && (quantity === '' || parseInt(quantity) < 0)) {
+            Alert.alert("Missing Information", "Please specify a valid quantity or select Unlimited/Hidden.");
+            return;
+          }
 
-            // Get current user's shop ID
-            const userId = FIREBASE_AUTH.currentUser?.uid;
-            if (!userId) {
-                alert('Not authenticated');
-                return;
-            }
+          const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-            const userDoc = await getDoc(doc(FIREBASE_DB, "users", userId));
-            const shopId = userDoc.data()?.shopId;
+          if (authError || !user) {
+            Alert.alert("Authentication Required", "Please log in to add items.");
+            return;
+          }
 
-            if (!shopId) {
-                alert('No shop found for this user');
-                return;
-            }
+          const userId = user.id;
 
-            // Create item in shop's items subcollection
-            const itemRef = doc(collection(FIREBASE_DB, `shops/${shopId}/items`));
+          const { data: userData, error: userError } = await supabase
+            .from("users")
+            .select("shop_id")
+            .eq("id", userId)
+            .single();
 
-            let finalQuantity: number;
+          if (userError || !userData?.shop_id) {
+            Alert.alert("Shop Not Found", "No shop found for this user. Please create a shop first.");
+             router.push("../../(auth)/CreateShopScreen"); // Navigate to create shop screen
+            return;
+          }
 
-            if (isUnlimited) {
-                finalQuantity = -1; // Use -1 to represent unlimited
-            } else if (isHidden) {
-                finalQuantity = -2; // Use -2 to represent hidden
-            } else {
-                finalQuantity = quantity === '' ? 0 : parseInt(quantity);
-            }
+          const shopId = userData.shop_id;
 
-            await setDoc(itemRef, {
-                itemId: itemRef.id,
-                shopId,
-                name,
-                category,
-                description,
-                price: parseFloat(price),
-                quantity: finalQuantity,
-                images,
-                createdAt: new Date().toISOString()
-            });
+          let finalQuantity: number | null = null;
+          if (isUnlimited) finalQuantity = -1; // Use -1 for unlimited
+          else if (isHidden) finalQuantity = -2; // Use -2 for hidden
+          else finalQuantity = quantity === "" ? 0 : parseInt(quantity); // Use parsed quantity or 0
 
-            alert('Product added successfully!');
-            router.push({
-                pathname: "/(tabs)/shop_owner/EditShopScreen",
-                params: { shopId }
-            });
-        } catch (error) {
-            console.error('Error adding product:', error);
-            alert('Failed to add product');
+          const { error: insertError } = await supabase.from("items").insert([
+            {
+              shop_id: shopId,
+              name,
+              description,
+              price: parseFloat(price),
+              quantity: finalQuantity,
+              images, // Assuming images are stored as URLs or paths
+              created_at: new Date().toISOString(),
+            },
+          ]);
+
+          if (insertError) {
+             console.error("Error inserting item:", insertError);
+             Alert.alert("Insertion Failed", "Failed to add product.");
+             return;
+          }
+
+          Alert.alert("Success", "Product added successfully!");
+          router.push({
+            pathname: "/(tabs)/shop_owner/EditShopScreen",
+            params: { shopId },
+          });
+        } catch (error: any) {
+          console.error("Error adding product:", error);
+          Alert.alert("Error", error.message || "An unexpected error occurred while adding the product.");
         }
-    };
+      };
+
 
     return (
-        <ScrollView style={styles.background}>
+        <ScrollView contentContainerStyle={styles.scrollViewContent}>
             <View style={styles.container}>
-                {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()}>
+                    <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Go back">
                         <Ionicons name="arrow-back" size={24} color="#6F4E37" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Add Product</Text>
                 </View>
 
-                {/* Product Info */}
-                <TextInput
-                    label="Product Name"
-                    value={name}
-                    onChangeText={setName}
-                    mode="outlined"
-                    style={styles.input}
-                />
+                <Text style={styles.sectionTitle}>Product Details</Text>
+                <View style={styles.formSection}>
+                    <TextInput
+                        label="Product Name"
+                        value={name}
+                        onChangeText={setName}
+                        mode="outlined"
+                        style={styles.input}
+                        theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                        outlineColor="#CCCCCC"
+                        activeOutlineColor="#6F4E37"
+                    />
 
-                <TextInput
-                    label="Category"
-                    value={category}
-                    onChangeText={setCategory}
-                    mode="outlined"
-                    style={styles.input}
-                />
+                    <TextInput
+                        label="Description"
+                        value={description}
+                        onChangeText={setDescription}
+                        mode="outlined"
+                        multiline
+                        numberOfLines={4}
+                        style={[styles.input, styles.multilineInput]}
+                        theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                        outlineColor="#CCCCCC"
+                        activeOutlineColor="#6F4E37"
+                    />
 
-                <TextInput
-                    label="Description"
-                    value={description}
-                    onChangeText={setDescription}
-                    mode="outlined"
-                    multiline
-                    numberOfLines={4}
-                    style={[styles.input, styles.multilineInput]}
-                />
+                    <TextInput
+                        label="Price ($)"
+                        value={price}
+                        onChangeText={setPrice}
+                        mode="outlined"
+                        keyboardType="decimal-pad"
+                        style={styles.input}
+                        theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                        outlineColor="#CCCCCC"
+                        activeOutlineColor="#6F4E37"
+                    />
+                </View>
 
-                <TextInput
-                    label="Price ($)"
-                    value={price}
-                    onChangeText={setPrice}
-                    mode="outlined"
-                    keyboardType="decimal-pad"
-                    style={styles.input}
-                />
-
-                {/* Quantity Section */}
                 <Text style={styles.sectionTitle}>Inventory Management</Text>
-
-                <View style={styles.toggleContainer}>
-                    <Text>Unlimited Stock</Text>
-                    <Switch
-                        value={isUnlimited}
-                        onValueChange={toggleUnlimited}
-                        trackColor={{ false: '#767577', true: '#D4A373' }}
-                        thumbColor={isUnlimited ? '#f5dd4b' : '#f4f3f4'}
-                        disabled={isHidden}
-                    />
-                </View>
-
-                <View style={styles.toggleContainer}>
-                    <Text>Hide Item</Text>
-                    <Switch
-                        value={isHidden}
-                        onValueChange={toggleHidden}
-                        trackColor={{ false: '#767577', true: '#D4A373' }}
-                        thumbColor={isHidden ? '#f5dd4b' : '#f4f3f4'}
-                        disabled={isUnlimited}
-                    />
-                </View>
-
-                {!isUnlimited && !isHidden && (
-                    <View style={styles.quantityContainer}>
-                        <Text style={styles.quantityLabel}>Quantity in Stock:</Text>
-                        <View style={styles.quantityControls}>
-                            <TouchableOpacity
-                                style={styles.quantityButton}
-                                onPress={decrementQuantity}
-                            >
-                                <Ionicons name="remove" size={20} color="#6F4E37" />
-                            </TouchableOpacity>
-
-                            <TextInput
-                                value={quantity}
-                                onChangeText={handleQuantityChange}
-                                keyboardType="number-pad"
-                                style={styles.quantityInput}
-                                mode="outlined"
-                            />
-
-                            <TouchableOpacity
-                                style={styles.quantityButton}
-                                onPress={incrementQuantity}
-                            >
-                                <Ionicons name="add" size={20} color="#6F4E37" />
-                            </TouchableOpacity>
-                        </View>
+                <View style={styles.formSection}>
+                    <View style={styles.toggleContainer}>
+                        <Text style={styles.toggleLabel}>Unlimited Stock</Text>
+                        <Switch
+                            value={isUnlimited}
+                            onValueChange={toggleUnlimited}
+                            trackColor={{ false: '#CCCCCC', true: '#6F4E37' }}
+                            thumbColor={isUnlimited ? '#FFFFFF' : '#FFFFFF'}
+                            disabled={isHidden}
+                        />
                     </View>
-                )}
 
-                {/* Image Section */}
+                    <View style={styles.toggleContainer}>
+                        <Text style={styles.toggleLabel}>Hide Item</Text>
+                        <Switch
+                            value={isHidden}
+                            onValueChange={toggleHidden}
+                            trackColor={{ false: '#CCCCCC', true: '#6F4E37' }}
+                            thumbColor={isHidden ? '#FFFFFF' : '#FFFFFF'}
+                            disabled={isUnlimited}
+                        />
+                    </View>
+
+                    {!isUnlimited && !isHidden && (
+                        <View style={styles.quantityContainer}>
+                            <Text style={styles.quantityLabel}>Quantity in Stock:</Text>
+                            <View style={styles.quantityControls}>
+                                <TouchableOpacity
+                                    style={styles.quantityButton}
+                                    onPress={decrementQuantity}
+                                    accessibilityLabel="Decrease quantity"
+                                >
+                                    <Ionicons name="remove-outline" size={20} color="#6F4E37" />
+                                </TouchableOpacity>
+
+                                <TextInput
+                                    value={quantity}
+                                    onChangeText={handleQuantityChange}
+                                    keyboardType="number-pad"
+                                    style={styles.quantityInput}
+                                    mode="outlined"
+                                    theme={{ colors: { primary: '#6F4E37', background: '#FFFFFF' } }}
+                                    outlineColor="#CCCCCC"
+                                    activeOutlineColor="#6F4E37"
+                                />
+
+                                <TouchableOpacity
+                                    style={styles.quantityButton}
+                                    onPress={incrementQuantity}
+                                    accessibilityLabel="Increase quantity"
+                                >
+                                    <Ionicons name="add-outline" size={20} color="#6F4E37" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    )}
+                </View>
+
                 <Text style={styles.sectionTitle}>Product Images</Text>
                 <View style={styles.imageContainer}>
                     {images.map((uri, index) => (
                         <Image key={index} source={{ uri }} style={styles.imagePreview} />
                     ))}
-                    <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
-                        <Ionicons name="add-circle" size={24} color="#6F4E37" />
+                    <TouchableOpacity style={styles.addImageButton} onPress={pickImage} accessibilityLabel="Add image">
+                        <Ionicons name="add-circle-outline" size={32} color="#6F4E37" />
                     </TouchableOpacity>
                 </View>
 
-                {/* Submit Button */}
-                <ScreenWideButton
-                    text="Add Product"
-                    onPress={handleAddItem}  // Changed from handleCreateItem to handleAddItem
-                    color="#D4A373"
-                    textColor="#FFFFFF"
-                />
+                <View style={styles.buttonContainer}>
+                    <ScreenWideButton
+                        text="Add Product"
+                        onPress={handleAddItem}
+                        color="#6F4E37"
+                        textColor="#FFFFFF"
+                        style={styles.primaryButton}
+                        disabled={!name || !description || !price || (!isUnlimited && !isHidden && quantity === '')}
+                    />
+                </View>
             </View>
         </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    background: {
-        flex: 1,
-        backgroundColor: '#F5EDD8',
+    scrollViewContent: {
+        flexGrow: 1,
+        backgroundColor: '#FFFFFF',
+        paddingBottom: 40,
     },
     container: {
-        padding: 16,
+        flex: 1,
+        paddingHorizontal: 24,
+        paddingTop: 40,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 24,
-        paddingTop: 40,
+        paddingTop: 20,
     },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: 'bold',
         marginLeft: 16,
-        color: '#6F4E37',
+        color: '#333333',
+    },
+    formSection: {
+        marginBottom: 24,
+        gap: 16,
     },
     input: {
-        marginBottom: 16,
         backgroundColor: '#FFFFFF',
     },
     multilineInput: {
-        height: 100,
+        minHeight: 100,
+        textAlignVertical: 'top',
+    },
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 12,
+        marginTop: 16,
+        color: '#333333',
     },
     toggleContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 12,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEEEEE',
+    },
+     toggleLabel: {
+        fontSize: 16,
+        color: '#333333',
     },
     quantityContainer: {
         backgroundColor: '#FFFFFF',
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 16,
+        paddingVertical: 12,
     },
     quantityLabel: {
         fontSize: 16,
         marginBottom: 12,
-        color: '#6F4E37',
+        color: '#333333',
     },
     quantityControls: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
+        gap: 12,
     },
     quantityButton: {
         width: 40,
@@ -318,40 +352,47 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#E0E0E0',
+        borderColor: '#CCCCCC',
     },
     quantityInput: {
         width: 80,
         textAlign: 'center',
-        marginHorizontal: 12,
         backgroundColor: '#FFFFFF',
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 12,
-        color: '#6F4E37',
     },
     imageContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 8,
+        gap: 12,
         marginBottom: 24,
     },
     imagePreview: {
-        width: 100,
-        height: 100,
+        width: 80,
+        height: 80,
         borderRadius: 8,
+        backgroundColor: '#EEEEEE',
     },
     addImageButton: {
-        width: 100,
-        height: 100,
+        width: 80,
+        height: 80,
         borderRadius: 8,
         backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#6F4E37',
+        borderColor: '#CCCCCC',
+    },
+    buttonContainer: {
+        marginTop: 24,
+        marginBottom: 40,
+    },
+    primaryButton: {
+        borderRadius: 12,
+        paddingVertical: 14,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
     },
 });
 

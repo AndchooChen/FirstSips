@@ -2,9 +2,7 @@ import { View, Alert, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { useStripe } from '@stripe/stripe-react-native';
 import { Button } from 'react-native-paper';
-import { addDoc, collection } from 'firebase/firestore';
-import { FIREBASE_DB } from '../auth/FirebaseConfig';
-import { OrderStatus } from '../types/order';
+import { supabase } from '../utils/supabase';
 
 interface CartItem {
   id: string;
@@ -47,26 +45,29 @@ const PaymentComponent = ({
 
   const createOrder = async (paymentIntentId: string) => {
     try {
-      const orderRef = collection(FIREBASE_DB, 'orders');
-      const newOrder = {
-        shopId,
-        customerId: customerInfo.userId,
-        customerName: customerInfo.name,
-        customerPhone: customerInfo.phoneNumber,
-        items: cartItems,
-        totalAmount: (amount / 100).toFixed(2),
-        paymentIntentId,
-        status: 'pending' as OrderStatus,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        pickupTime: pickupTime,
-      };
-
-      const docRef = await addDoc(orderRef, newOrder);
-      return docRef.id;
+      const { data, error } = await supabase
+        .from("orders")
+        .insert({
+          shop_id: shopId,
+          customer_id: customerInfo.userId,
+          customer_name: customerInfo.name,
+          customer_phone: customerInfo.phoneNumber,
+          items: cartItems,
+          total_amount: (amount / 100).toFixed(2),
+          payment_intent_id: paymentIntentId,
+          status: "pending",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          pickup_time: pickupTime,
+        })
+        .select("id")
+        .single();
+  
+      if (error) throw error;
+      return data.id;
     } catch (error) {
-      console.error('Error creating order:', error);
-      throw new Error('Failed to create order');
+      console.error("Error creating order:", error);
+      throw new Error("Failed to create order");
     }
   };
 

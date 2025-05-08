@@ -1,8 +1,7 @@
 import { View, StyleSheet, FlatList, ActivityIndicator, ScrollView } from 'react-native';
 import { Text, Card, Button, Portal, Dialog, RadioButton } from 'react-native-paper';
 import { useState, useEffect, useMemo } from 'react';
-import { FIREBASE_AUTH, FIREBASE_DB } from '../auth/FirebaseConfig';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { supabase } from '../utils/supabase';
 import { Order, OrderStatus } from '../types/order';
 
 const OrderQueue = ({ shopId }: { shopId: string }) => {
@@ -20,52 +19,49 @@ const OrderQueue = ({ shopId }: { shopId: string }) => {
 
     const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
         try {
-            console.log("Attempting to update order...");
-            console.log("Shop ID:", shopId);
-            console.log("Current User ID:", FIREBASE_AUTH.currentUser?.uid);
-            console.log("Order ID:", orderId);
-            console.log("New Status:", newStatus);
-    
-            const orderRef = doc(FIREBASE_DB, 'orders', orderId);
-            console.log("Firestore Order Reference Path:", orderRef.path);
-    
-            // Fetch the order document to confirm it exists and check its shopId
-            const orderSnapshot = await getDoc(orderRef);
-            if (!orderSnapshot.exists()) {
-                console.error("Order not found in Firestore.");
+            const { data: orderData, error: fetchError } = await supabase
+                .from("orders")
+                .select("*")
+                .eq("id", orderId)
+                .single();
+      
+            if (fetchError || !orderData) {
+                console.error("Order not found in Supabase.");
                 alert("Error: Order does not exist.");
                 return;
             }
-    
-            const orderData = orderSnapshot.data();
-            console.log("Fetched Order Data:", orderData);
-    
-            // Ensure the order has a valid shopId
-            if (!orderData.shopId) {
-                console.error("Order document is missing shopId.");
-                alert("Error: Order is missing shopId.");
+      
+            if (!orderData.shop_id) {
+                console.error("Order is missing shop_id.");
+                alert("Error: Order is missing shop_id.");
                 return;
             }
-    
-            // Verify if the shopId matches the user's shopId
-            if (orderData.shopId !== shopId) {
+      
+            if (orderData.shop_id !== shopId) {
                 console.error("Mismatch: Order's shopId does not match the user's shopId.");
                 alert("Error: You do not have permission to update this order.");
                 return;
             }
-    
-            await updateDoc(orderRef, {
-                status: newStatus,
-                updatedAt: new Date()
-            });
-    
+      
+            const { error: updateError } = await supabase
+                .from("orders")
+                .update({
+                    status: newStatus,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", orderId);
+      
+            if (updateError) {
+                throw updateError;
+            }
+      
             console.log("Order status successfully updated to:", newStatus);
         } catch (error) {
             console.error("Error updating order:", error);
             alert("Error: Failed to update order status.");
         }
     };
-    
+      
 
     const handleStatusUpdate = async () => {
         if (!selectedOrder) return;
@@ -171,29 +167,49 @@ const OrderQueue = ({ shopId }: { shopId: string }) => {
     }, [orders]);
 
     useEffect(() => {
-        // Query for active orders
-        const ordersRef = collection(FIREBASE_DB, 'orders');
-        const q = query(
-            ordersRef,
-            where('shopId', '==', shopId),
-            where('status', 'in', ['pending', 'accepted', 'preparing', 'completed']),
-            orderBy('createdAt', 'asc')
-        );
-
-        // Real-time listener
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const orderData = snapshot.docs.map(doc => ({
-                ...doc.data(),
-                orderId: doc.id,
-                createdAt: doc.data().createdAt?.toDate(),
-                pickupTime: doc.data().pickupTime,
+        let intervalId: any;
+    
+        const fetchOrders = async () => {
+          const { data, error } = await supabase
+            .from("orders")
+            // --- MODIFIED SELECT STATEMENT ---
+            .select("*, order_items(*)")
+            // ---------------------------------
+            .eq("shop_id", shopId)
+            .in("status", ["pending", "accepted", "preparing", "completed"])
+            .order("created_at", { ascending: true });
+    
+          if (!error && data) {
+            const formattedOrders = data.map((order) => ({
+              ...order,
+              orderId: order.id, // Assuming orderId property matches Supabase 'id' column
+              createdAt: new Date(order.created_at),
+              pickupTime: order.pickup_time,
+              // --- MAP order_items TO items ---
+              // Supabase fetches related data into a property named after the foreign table
+              items: order.order_items || [], // Ensure it's an array, even if no items
+              // Make sure other properties expected by your Order type are present/mapped
+              // e.g., customerName, customerPhone, totalAmount - assuming these are on the 'orders' table
+              customerName: order.customer_name, // Adjust column names if needed
+              customerPhone: order.customer_phone,
+              totalAmount: order.total, // Adjust column names if needed
             })) as Order[];
-            setOrders(orderData);
+    
+            setOrders(formattedOrders);
             setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, [shopId]);
+          } else if (error) {
+            console.error("Error fetching orders:", error);
+            // Handle error, maybe show a message
+            setLoading(false); // Stop loading even on error
+          }
+        };
+    
+        fetchOrders();
+        intervalId = setInterval(fetchOrders, 10000); // Poll every 10 seconds
+    
+        return () => clearInterval(intervalId); // Cleanup on unmount
+    }, [shopId]); // Dependency array includes shopId
+      
 
     // Add to existing styles
     const getStatusStyle = (status: OrderStatus) => ({
@@ -243,7 +259,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 16,
-        backgroundColor: '#F5EDD8',
+        backgroundColor: '#FFFFFF',
     },
     title: {
         marginBottom: 16,

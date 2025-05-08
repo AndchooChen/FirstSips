@@ -3,11 +3,10 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Ale
 import { Divider, ActivityIndicator, Button } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { FIREBASE_AUTH, FIREBASE_DB } from "../auth/FirebaseConfig";
-import { doc, getDoc, setDoc, collection, addDoc, updateDoc } from 'firebase/firestore';
 import { useStripe } from '@stripe/stripe-react-native';
 import { API_URL } from '../config/api';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
+import { supabase } from '../utils/supabase';
 
 interface ShopData {
     shopName: string;
@@ -36,54 +35,146 @@ const CheckoutScreen = () => {
         phoneNumber: '',
         userId: '',
     });
-    const [pickupTime, setPickupTime] = useState('');
-    const [shopData, setShopData] = useState<ShopData | null>(null);
+    // Shop data is fetched but not currently used in the UI
+    const [_shopData, _setShopData] = useState<ShopData | null>(null);
     const [loading, setLoading] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
     const router = useRouter();
     const params = useLocalSearchParams();
-    const { items, shopId } = params;
+    const { items: itemsParam, shopId } = params;
 
-    // Time picker state
-    const [date, setDate] = useState(new Date());
+    // Parse cart items from URL params
+    useEffect(() => {
+        if (itemsParam) {
+            try {
+                const parsedItems = JSON.parse(itemsParam as string);
+                setCartItems(parsedItems);
+            } catch (error) {
+                console.error('Error parsing cart items:', error);
+                Alert.alert('Error', 'There was a problem loading your cart items');
+                router.back();
+            }
+        } else {
+            // No items in cart, go back
+            Alert.alert('Empty Cart', 'Please add items to your cart');
+            router.back();
+        }
+    }, [itemsParam]);
+
+    const formatTime = (date: { getHours: () => any; getMinutes: () => any; }) => {
+      if (!date) return null;
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const formattedHours = hours % 12 || 12; // the hour '0' should be '12'
+      const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
+      return `${formattedHours}:${formattedMinutes} ${ampm}`;
+    };
+    
+    // Function to generate the list of available time options (Date objects)
+    // Starts 5 minutes from now, in 5-minute intervals, up to 1 hour from now.
+    const generateTimeOptions = () => {
+      const options = [];
+      const now = new Date();
+      const startTime = new Date(now.getTime() + 5 * 60 * 1000); // Start 5 minutes from now
+      const endTime = new Date(now.getTime() + 60 * 60 * 1000); // End 1 hour from now
+    
+      let currentTime = new Date(startTime);
+    
+      // Round up the start time to the nearest 5-minute interval if it's not already
+      const startMinutes = currentTime.getMinutes();
+      const remainder = startMinutes % 5;
+      if (remainder !== 0) {
+        currentTime.setMinutes(startMinutes + (5 - remainder));
+        currentTime.setSeconds(0);
+        currentTime.setMilliseconds(0);
+      } else {
+          // If it's already on a 5-minute mark, just ensure seconds/milliseconds are zero
+          currentTime.setSeconds(0);
+          currentTime.setMilliseconds(0);
+      }
+    
+      // Add times in 5-minute intervals until the end time is reached
+      while (currentTime <= endTime) {
+        options.push(new Date(currentTime));
+        currentTime.setMinutes(currentTime.getMinutes() + 5);
+    
+        // Safety break to prevent infinite loops in case of logic errors
+        if (options.length > 120) { // Max 12 intervals per hour * 2 hours buffer = 24 intervals * 5 = 120
+             console.warn("Time option generation potentially in infinite loop");
+             break;
+        }
+      }
+    
+      return options; // This will be an array of Date objects
+    };
+
     const [showTimePicker, setShowTimePicker] = useState(false);
+    // State to hold the currently selected Date object from the list
+    const [selectedDate, setSelectedDate] = useState(null);
+    // State to hold the formatted string displayed on the button
+    const [pickupTime, setPickupTime] = useState('');
+
+    // Generate the list of available time options (Date objects)
+    const availableTimeDates = generateTimeOptions();
+    // Format these Date objects into strings for the Picker items
+    const availableTimeStringOptions = availableTimeDates.map(date => formatTime(date));
+
+    // Effect to set the initial pickup time when the component mounts
+    useEffect(() => {
+      if (availableTimeDates.length > 0) {
+        // Set the initial selected date to the first available date
+        setSelectedDate(availableTimeDates[0]);
+        // Set the initial pickup time text to the formatted first available time
+        setPickupTime(formatTime(availableTimeDates[0]) as any);
+      }
+    }, []); // Empty dependency array ensures this runs only once on mount
+
+    // Function to handle selection from the Picker
+    const handleTimeChange = (itemValue, itemIndex) => {
+      // itemValue will be the formatted time string
+      // itemIndex will be the index in the availableTimeStringOptions array
+      const selectedDateObject = availableTimeDates[itemIndex]; // Get the corresponding Date object
+      setSelectedDate(selectedDateObject);
+      setPickupTime(itemValue); // Update the displayed text
+    };
 
     // Function to check item availability
     const checkItemAvailability = async (itemId: string, requestedQuantity: number) => {
         try {
-            // Get the current item data from Firestore
-            const itemDoc = await getDoc(doc(FIREBASE_DB, `shops/${shopId}/items/${itemId}`));
-            if (!itemDoc.exists()) {
-                return { available: false, message: 'Item no longer exists' };
-            }
+          const { data: itemData, error } = await supabase
+            .from("items")
+            .select("*")
+            .eq("id", itemId)
+            .single();
 
-            const itemData = itemDoc.data();
+          if (error || !itemData) {
+            return { available: false, message: "Item no longer exists" };
+          }
 
-            // Check if item is hidden
-            if (itemData.quantity === -2) {
-                return { available: false, message: 'This item is not available for purchase.' };
-            }
+          if (itemData.quantity === -2) {
+            return { available: false, message: "This item is not available for purchase." };
+          }
 
-            // If unlimited stock
-            if (itemData.quantity === -1) {
-                return { available: true };
-            }
-
-            // Check if enough stock
-            if (requestedQuantity > itemData.quantity) {
-                return {
-                    available: false,
-                    message: `Sorry, only ${itemData.quantity} items available in stock.`
-                };
-            }
-
+          if (itemData.quantity === -1) {
             return { available: true };
+          }
+
+          if (requestedQuantity > itemData.quantity) {
+            return {
+              available: false,
+              message: `Sorry, only ${itemData.quantity} items available in stock.`,
+            };
+          }
+
+          return { available: true };
         } catch (error) {
-            console.error('Error checking item availability:', error);
-            return { available: false, message: 'Error checking availability' };
+          console.error("Error checking item availability:", error);
+          return { available: false, message: "Error checking availability" };
         }
-    };
+      };
+
 
     // Function to update cart items
     const updateCartItem = async (itemId: string, changeType: 'increase' | 'decrease') => {
@@ -126,17 +217,6 @@ const CheckoutScreen = () => {
         });
     };
 
-    // Parse cart items from params with type safety
-    useEffect(() => {
-        try {
-            const parsedItems = JSON.parse(items as string || '[]');
-            setCartItems(parsedItems);
-        } catch (error) {
-            console.error('Error parsing cart items:', error);
-            setCartItems([]);
-        }
-    }, [items]);
-
     // Calculate totals with error handling
     const totals = useMemo(() => {
         const subtotal = cartItems.reduce((sum, item) =>
@@ -152,53 +232,97 @@ const CheckoutScreen = () => {
     }, [cartItems]);
 
     const fetchPaymentSheetParams = async () => {
-        const userId = FIREBASE_AUTH.currentUser?.uid;
-        if (!userId) {
-            throw new Error('User not authenticated');
-        }
+        try {
+            // Get current user
+            const {
+                data: {user}
+            } = await supabase.auth.getUser();
 
-        console.log("Fetching payment sheet params");
-        const response = await fetch(`${API_URL}/payments/payment-sheet`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                amount: Math.round(totals.total * 100),
-                currency: 'usd',
-                customerId: userId,
-                shopId
-            }),
-        });
+            const userId = user?.id;
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Payment sheet error:', {
-                status: response.status,
-                statusText: response.statusText,
-                body: errorText
+            if (!userId) {
+                throw new Error('User not authenticated');
+            }
+
+            // Validate shopId
+            if (!shopId) {
+                throw new Error('Shop ID is missing');
+            }
+
+            // Clean the shopId to ensure it's properly formatted
+            const cleanShopId = String(shopId).trim();
+
+            // Verify the shop exists and has Stripe set up
+            const { data: shopData, error: shopError } = await supabase
+                .from("shops")
+                .select("id, stripe_account_id")
+                .eq("id", cleanShopId)
+                .single();
+
+            if (shopError || !shopData) {
+                console.error('Shop verification error:', shopError);
+                throw new Error('Shop not found in database');
+            }
+
+            if (!shopData.stripe_account_id) {
+                throw new Error('This shop has not set up payment processing yet');
+            }
+
+            console.log("Fetching payment sheet params for shop:", cleanShopId);
+            console.log("Totals:", totals);
+
+            const response = await fetch(`${API_URL}/payments/payment-sheet`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    amount: Math.round(totals.total * 100),
+                    currency: 'usd',
+                    customerId: userId,
+                    shopId: cleanShopId
+                }),
             });
-            throw new Error(`Failed to fetch payment sheet: ${errorText}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Payment sheet error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
+                throw new Error(`Failed to fetch payment sheet: ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log("Payment sheet params:", data);
+
+            return {
+                paymentIntent: data.paymentIntent,
+                ephemeralKey: data.ephemeralKey,
+                customer: data.customer,
+            };
+        } catch (error: any) {
+            console.error('Error in fetchPaymentSheetParams:', error);
+            Alert.alert(
+                'Payment Setup Error',
+                error.message || 'Unable to set up payment. Please try again.'
+            );
+            throw error;
         }
-
-        const data = await response.json();
-        console.log("Payment sheet params:", data);
-
-        return {
-            paymentIntent: data.paymentIntent,
-            ephemeralKey: data.ephemeralKey,
-            customer: data.customer,
-        };
     };
 
     const initializePaymentSheet = async () => {
         try {
             console.log("Initializing payment sheet");
+            setIsProcessing(true);
+
             const {
                 paymentIntent,
                 ephemeralKey,
                 customer,
             } = await fetchPaymentSheetParams();
+
             console.log("Payment sheet params fetched");
             const { error } = await initPaymentSheet({
                 merchantDisplayName: "FirstSips",
@@ -214,13 +338,18 @@ const CheckoutScreen = () => {
             });
 
             if (error) {
-                Alert.alert('Error', error.message);
-            } else {
-                setLoading(true);
+                console.error('Payment sheet initialization error:', error);
+                Alert.alert('Payment Setup Error', error.message);
+                return;
             }
-        } catch (error) {
+
+            setLoading(true);
+            console.log("Payment sheet initialized successfully");
+        } catch (error: any) {
             console.error('Error initializing payment sheet:', error);
-            Alert.alert('Error', 'Unable to initialize payment');
+            // Don't show another alert as fetchPaymentSheetParams already shows one
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -228,336 +357,326 @@ const CheckoutScreen = () => {
         if (!loading) return;
 
         try {
-            setIsProcessing(true);
+          setIsProcessing(true);
 
-            // Check availability for all items before proceeding
-            for (const item of cartItems) {
-                const result = await checkItemAvailability(item.id, item.quantity);
-                if (!result.available) {
-                    Alert.alert('Inventory Issue', result.message);
-                    setIsProcessing(false);
-                    return;
-                }
+          for (const item of cartItems) {
+            const result = await checkItemAvailability(item.id, item.quantity);
+            if (!result.available) {
+              Alert.alert("Inventory Issue", result.message);
+              setIsProcessing(false);
+              return;
             }
+          }
 
-            const { error } = await presentPaymentSheet();
+          const { error: paymentError } = await presentPaymentSheet();
 
-            if (error) {
-                Alert.alert('Error', error.message);
-                return;
+          if (paymentError) {
+            Alert.alert("Error", paymentError.message);
+            return;
+          }
+
+          // Create the order first
+          const { data: orderData, error: orderError } = await supabase
+            .from("orders")
+            .insert([
+              {
+                user_id: customerInfo.userId,
+                shop_id: shopId,
+                total: parseFloat(totals.total.toFixed(2)),
+                status: "pending",
+                pickup_time: pickupTime,
+                created_at: new Date().toISOString(),
+              },
+            ])
+            .select()
+            .single();
+
+          if (orderError) {
+            throw orderError;
+          }
+
+          console.log('Order created with ID:', orderData.id);
+
+          // Now create entries in the order_items table for each item
+          const orderItemsPromises = cartItems.map(item => {
+            return supabase
+              .from("order_items")
+              .insert({
+                order_id: orderData.id,
+                item_id: item.id,
+                quantity: item.quantity,
+                price: item.price,
+                created_at: new Date().toISOString()
+              });
+          });
+
+          // Wait for all order items to be inserted
+          const orderItemsResults = await Promise.all(orderItemsPromises);
+
+          // Check if any order items failed to insert
+          const orderItemsErrors = orderItemsResults.filter(result => result.error);
+          if (orderItemsErrors.length > 0) {
+            console.error('Errors inserting order items:', orderItemsErrors);
+            throw new Error('Failed to create some order items');
+          }
+
+          console.log('Successfully created', orderItemsResults.length, 'order items');
+
+          // Update item quantities in inventory
+          for (const item of cartItems) {
+            const { data: itemData } = await supabase
+              .from("items")
+              .select("quantity")
+              .eq("id", item.id)
+              .single();
+
+            if (itemData && itemData.quantity !== -1 && itemData.quantity !== -2) {
+              const newQuantity = itemData.quantity - item.quantity;
+              await supabase
+                .from("items")
+                .update({ quantity: newQuantity })
+                .eq("id", item.id);
             }
+          }
 
-            // Create order in Firestore
-            const orderRef = collection(FIREBASE_DB, 'orders');
-            const newOrder = {
-                shopId,
-                customerId: customerInfo.userId,
-                customerName: customerInfo.name,
-                customerPhone: customerInfo.phoneNumber,
-                items: cartItems,
-                totalAmount: totals.total.toFixed(2),
-                status: 'pending',
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                pickupTime: pickupTime,
-            };
-
-            const docRef = await addDoc(orderRef, newOrder);
-
-            // Store order references for user
-            await setDoc(doc(FIREBASE_DB, 'users', customerInfo.userId, 'orders', docRef.id), {
-                customerId: customerInfo.userId,
-                shopId: shopId as string,
-                createdAt: new Date(),
-            });
-
-            // Store order references for shop
-            await setDoc(doc(FIREBASE_DB, 'shops', shopId as string, 'orders', docRef.id), {
-                customerId: customerInfo.userId,
-                shopId: shopId as string,
-                createdAt: new Date(),
-            });
-
-            // Update item quantities in Firestore
-            for (const item of cartItems) {
-                const itemRef = doc(FIREBASE_DB, `shops/${shopId}/items/${item.id}`);
-                const itemDoc = await getDoc(itemRef);
-
-                if (itemDoc.exists()) {
-                    const itemData = itemDoc.data();
-
-                    // Only update if the item has a limited quantity (not unlimited or hidden)
-                    if (itemData.quantity !== -1 && itemData.quantity !== -2) {
-                        const newQuantity = itemData.quantity - item.quantity;
-                        await updateDoc(itemRef, { quantity: newQuantity });
-                    }
-                }
-            }
-
-            Alert.alert('Success', 'Your order has been placed!');
-            router.push({
-                pathname: "/(checkout)/SuccessScreen",
-                params: { orderId: docRef.id }
-            });
+          Alert.alert("Success", "Your order has been placed!");
+          router.push({
+            pathname: "/(checkout)/SuccessScreen",
+            params: { orderId: orderData.id },
+          });
         } catch (error) {
-            console.error('Payment Error:', error);
-            Alert.alert('Error', 'Unable to process payment');
+          console.error("Payment Error:", error);
+          Alert.alert("Error", "Unable to process payment");
         } finally {
-            setIsProcessing(false);
+          setIsProcessing(false);
         }
-    };
+      };
+
 
     useEffect(() => {
-        initializePaymentSheet();
-    }, [totals.total, shopId, customerInfo]);
+        // Only initialize payment sheet when we have all required data
+        if (shopId && customerInfo.userId && cartItems.length > 0 && totals.total > 0) {
+            // Add a small delay to ensure all state is properly updated
+            const timer = setTimeout(() => {
+                initializePaymentSheet();
+            }, 500);
+
+            return () => clearTimeout(timer);
+        }
+    }, [totals.total, shopId, customerInfo, cartItems]);
 
     // Fetch user data
     useEffect(() => {
-        const fetchUserData = async () => {
-            console.log("Fetching user data");
-            const userId = FIREBASE_AUTH.currentUser?.uid; // Get the current user ID from Firebase Auth
-            if (!userId) {
-                alert('User not authenticated');
-                setLoading(false);
-                return;
-            }
+        const getUserData = async () => {
+          const { data: { user }, error: authError } = await supabase.auth.getUser();
+          if (authError || !user) {
+            alert("User not authenticated");
+            setLoading(false);
+            return;
+          }
 
-            // Reference to the user document in Firestore
-            const userDocRef = doc(FIREBASE_DB, 'users', userId);
+          const { data: userData, error: userDataError } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", user.id)
+            .single();
 
-            try {
-                // Fetch the user document
-                const userDocSnap = await getDoc(userDocRef);
+          if (userDataError || !userData) {
+            alert("User data not found");
+          } else {
+            const name = `${userData.first_name || ""} ${userData.last_name || ""}`.trim();
+            const phoneNumber = userData.phone_number || "";
 
-                if (userDocSnap.exists()) {
-                    const userData = userDocSnap.data();
+            setCustomerInfo({
+              name,
+              phoneNumber,
+              userId: user.id,
+            });
+          }
 
-                    // Concatenate firstName and lastName to get full name
-                    const name = `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
-                    const phoneNumber = userData.phoneNumber || '';
-
-                    // Update state with the fetched data
-                    setCustomerInfo({
-                        name,
-                        phoneNumber,
-                        userId,
-                    });
-                } else {
-                    alert('User data not found');
-                }
-            } catch (error) {
-                console.error('Error fetching user data:', error);
-                alert('Failed to fetch user data');
-            } finally {
-                setLoading(false);
-            }
+          setLoading(false);
         };
 
-        fetchUserData();
-    }, []);
+        getUserData();
+      }, []);
+
 
     // Fetch shop data
     useEffect(() => {
         const fetchShopData = async () => {
-            if (!shopId) return;
+          if (!shopId) return;
 
-            try {
-                const shopDoc = await getDoc(doc(FIREBASE_DB, 'shops', shopId as string));
+          // Clean the shopId to ensure it's properly formatted
+          const cleanShopId = String(shopId).trim();
 
-                if (shopDoc.exists()) {
-                    const shopDataFromDB = shopDoc.data() as ShopData;
+          const { data: shopData, error: shopError } = await supabase
+            .from("shops")
+            .select("*, stripe_account_id")
+            .eq("id", cleanShopId)
+            .single();
 
-                    // Fetch owner's data to get phone number
-                    const ownerDoc = await getDoc(doc(FIREBASE_DB, 'users', shopDataFromDB.ownerId));
-                    if (ownerDoc.exists()) {
-                        const ownerData = ownerDoc.data();
-                        setShopData({
-                            ...shopDataFromDB,
-                            phoneNumber: ownerData.phoneNumber || 'No phone number available'
-                        });
-                    } else {
-                        setShopData(shopDataFromDB);
-                    }
-                } else {
-                    alert('Shop data not found');
-                }
-            } catch (error) {
-                console.error('Error fetching shop data:', error);
-                alert('Failed to fetch shop data');
-            }
+          if (shopError || !shopData) {
+            console.error('Shop data not found:', shopError);
+            Alert.alert("Error", "Shop data not found. Please try again.");
+            router.back();
+            return;
+          }
+
+          // Check if shop has Stripe set up
+          if (!shopData.stripe_account_id) {
+            console.warn('Shop does not have Stripe set up:', cleanShopId);
+            // We'll continue anyway, but payment will fail later
+          }
+
+          const { data: ownerData } = await supabase
+            .from("users")
+            .select("phone_number")
+            .eq("id", shopData.owner_id)
+            .single();
+
+          _setShopData({
+            ...shopData,
+            phoneNumber: ownerData?.phone_number || "No phone number available",
+          });
         };
 
         fetchShopData();
-    }, [shopId]);
+      }, [shopId]);
 
-    return (
+
+      return (
         <SafeAreaView style={styles.safeArea}>
-            <ScrollView style={styles.container}>
-                {/* Back Arrow */}
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#6F4E37" />
-                </TouchableOpacity>
-
-                {/* Cart Items */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Order Details</Text>
-                    {cartItems.map((item, index) => (
-                        <View key={index} style={styles.cartItem}>
-                            <Image
-                                source={item.images?.[0] ? { uri: item.images[0] } : require('../assets/images/no_item_image.png')}
-                                style={styles.itemImage}
-                            />
-                            <View style={styles.itemInfo}>
-                                <Text style={styles.itemName}>{item.name}</Text>
-                                <Text style={styles.itemPrice}>${(item.price).toFixed(2)}</Text>
-                                <View style={styles.quantityContainer}>
-                                    <TouchableOpacity
-                                        style={styles.quantityButton}
-                                        onPress={() => updateCartItem(item.id, 'decrease')}
-                                    >
-                                        <Ionicons name="remove" size={20} color="#6F4E37" />
-                                    </TouchableOpacity>
-
-                                    <Text style={styles.quantityText}>{item.quantity}</Text>
-
-                                    <TouchableOpacity
-                                        style={styles.quantityButton}
-                                        onPress={() => updateCartItem(item.id, 'increase')}
-                                    >
-                                        <Ionicons name="add" size={20} color="#6F4E37" />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                            <Text style={styles.itemTotalPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
-                        </View>
-                    ))}
-                </View>
-
-                {/* Location Information */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Pickup Location</Text>
-                    <View style={styles.shopInfo}>
-                        <Text style={styles.shopName}>{shopData?.shopName}</Text>
-                        <Text style={styles.shopAddress}>{shopData?.streetAddress}</Text>
-                        <Text style={styles.shopAddress}>
-                            {shopData?.city}, {shopData?.state} {shopData?.zipCode}
-                        </Text>
-                        <Text style={styles.shopPhone}>📞 Contact: {shopData?.phoneNumber}</Text>
+          <ScrollView style={styles.container}>
+            {/* Back Arrow */}
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={24} color="#6F4E37" />
+            </TouchableOpacity>
+    
+            {/* Cart Items */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Order Details</Text>
+              {cartItems.map((item, index) => (
+                <View key={index} style={styles.cartItem}>
+                  <Image
+                    source={item.images?.[0] ? { uri: item.images[0] } : require('../assets/images/no_item_image.png')}
+                    style={styles.itemImage}
+                  />
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                    <Text style={styles.itemPrice}>${(item.price).toFixed(2)}</Text>
+                    <View style={styles.quantityContainer}>
+                      <TouchableOpacity
+                        style={styles.quantityButton}
+                        onPress={() => updateCartItem(item.id, 'decrease')}
+                      >
+                        <Ionicons name="remove" size={20} color="#6F4E37" />
+                      </TouchableOpacity>
+    
+                      <Text style={styles.quantityText}>{item.quantity}</Text>
+    
+                      <TouchableOpacity
+                        style={styles.quantityButton}
+                        onPress={() => updateCartItem(item.id, 'increase')}
+                      >
+                        <Ionicons name="add" size={20} color="#6F4E37" />
+                      </TouchableOpacity>
                     </View>
+                  </View>
+                  <Text style={styles.itemTotalPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
                 </View>
+              ))}
+            </View>
+    
+            {/* Pickup Time Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Pickup Time</Text>
+              <TouchableOpacity
+                style={styles.timePickerButton}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Text style={styles.timePickerButtonText}>
+                  {/* Display the formatted pickupTime state */}
+                  {pickupTime || 'Select Pickup Time'}
+                </Text>
+                <Ionicons name="time-outline" size={24} color="#6F4E37" />
+              </TouchableOpacity>
 
-                {/* Time Selection */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Pickup Time</Text>
-                    <TouchableOpacity
-                        style={styles.timePickerButton}
-                        onPress={() => setShowTimePicker(true)}
+              {/* Custom Time Picker Modal */}
+              <Modal
+                transparent={true}
+                visible={showTimePicker}
+                animationType="slide"
+                onRequestClose={() => setShowTimePicker(false)} // Handle Android back button
+              >
+                <View style={styles.modalContainer}>
+                  <View style={styles.modalContent}>
+                    <Text style={styles.modalTitle}>Select Pickup Time</Text>
+
+                    {/* Use the Picker component */}
+                    <Picker
+                      selectedValue={pickupTime} // The currently selected formatted time string
+                      style={styles.picker}
+                      onValueChange={handleTimeChange} // Handle selection
+                      itemStyle={styles.pickerItem} // Apply itemStyle here
                     >
-                        <Text style={styles.timePickerButtonText}>
-                            {pickupTime || 'Select Pickup Time'}
-                        </Text>
-                        <Ionicons name="time-outline" size={24} color="#6F4E37" />
-                    </TouchableOpacity>
+                      {/* Map the formatted time strings to Picker.Item components */}
+                      {availableTimeStringOptions.map((timeString, index) => (
+                        // Explicitly set label and value
+                        <Picker.Item key={index} label={timeString} value={timeString} />
+                      ))}
+                    </Picker>
 
-                    {showTimePicker && (
-                        Platform.OS === 'ios' ? (
-                            <Modal
-                                transparent={true}
-                                visible={showTimePicker}
-                                animationType="slide"
-                            >
-                                <View style={styles.modalContainer}>
-                                    <View style={styles.modalContent}>
-                                        <Text style={styles.modalTitle}>Select Pickup Time</Text>
-                                        <DateTimePicker
-                                            value={date}
-                                            mode="time"
-                                            display="spinner"
-                                            minuteInterval={5}
-                                            onChange={(_, selectedDate) => {
-                                                if (selectedDate) {
-                                                    setDate(selectedDate);
-                                                    const hours = selectedDate.getHours();
-                                                    const minutes = selectedDate.getMinutes();
-                                                    const ampm = hours >= 12 ? 'PM' : 'AM';
-                                                    const formattedHours = hours % 12 || 12;
-                                                    const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
-                                                    setPickupTime(`${formattedHours}:${formattedMinutes} ${ampm}`);
-                                                }
-                                            }}
-                                        />
-                                        <Button
-                                            mode="contained"
-                                            onPress={() => setShowTimePicker(false)}
-                                            style={styles.modalButton}
-                                        >
-                                            Done
-                                        </Button>
-                                    </View>
-                                </View>
-                            </Modal>
-                        ) : (
-                            <DateTimePicker
-                                value={date}
-                                mode="time"
-                                display="default"
-                                minuteInterval={5}
-                                onChange={(_, selectedDate) => {
-                                    setShowTimePicker(false);
-                                    if (selectedDate) {
-                                        setDate(selectedDate);
-                                        const hours = selectedDate.getHours();
-                                        const minutes = selectedDate.getMinutes();
-                                        const ampm = hours >= 12 ? 'PM' : 'AM';
-                                        const formattedHours = hours % 12 || 12;
-                                        const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
-                                        setPickupTime(`${formattedHours}:${formattedMinutes} ${ampm}`);
-                                    }
-                                }}
-                            />
-                        )
-                    )}
-                </View>
-
-                {/* Order Summary */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Order Summary</Text>
-                    <View style={styles.summaryRow}>
-                        <Text>Subtotal</Text>
-                        <Text>${totals.subtotal.toFixed(2)}</Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                        <Text>Tax</Text>
-                        <Text>${totals.tax.toFixed(2)}</Text>
-                    </View>
-                    <Divider style={styles.divider} />
-                    <View style={styles.summaryRow}>
-                        <Text style={styles.totalText}>Total</Text>
-                        <Text style={styles.totalAmount}>${totals.total.toFixed(2)}</Text>
-                    </View>
-                </View>
-
-                {/* Payment Section */}
-                {isProcessing && (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#6F4E37" />
-                        <Text style={styles.loadingText}>Processing your order...</Text>
-                    </View>
-                )}
-                {!isProcessing && (
                     <Button
-                        mode="contained"
-                        onPress={handlePayment}
-                        disabled={!loading}
-                        loading={isProcessing}
-                        style={styles.payButton}
+                      mode="contained"
+                      onPress={() => setShowTimePicker(false)}
+                      style={styles.modalButton}
                     >
-                        Pay ${totals.total.toFixed(2)}
+                      Done
                     </Button>
-                )}
-            </ScrollView>
+                  </View>
+                </View>
+              </Modal>
+            </View>
+    
+            {/* Order Summary */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Order Summary</Text>
+              <View style={styles.summaryRow}>
+                <Text>Subtotal</Text>
+                <Text>${totals.subtotal.toFixed(2)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text>Tax</Text>
+                <Text>${totals.tax.toFixed(2)}</Text>
+              </View>
+              <Divider style={styles.divider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.totalText}>Total</Text>
+                <Text style={styles.totalAmount}>${totals.total.toFixed(2)}</Text>
+              </View>
+            </View>
+    
+            {/* Payment Section */}
+            {isProcessing && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#6F4E37" />
+                <Text style={styles.loadingText}>Processing your order...</Text>
+              </View>
+            )}
+            {!isProcessing && (
+              <Button
+                mode="contained"
+                onPress={handlePayment}
+                disabled={!loading} // Use 'loading' state to disable the button
+                loading={isProcessing} // Use 'isProcessing' for the loading indicator on the button
+                style={styles.payButton}
+              >
+                Pay ${totals.total.toFixed(2)}
+              </Button>
+            )}
+          </ScrollView>
         </SafeAreaView>
-    );
+      );
 }
 
 const styles = StyleSheet.create({
@@ -749,6 +868,15 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: 'center',
         marginVertical: 16,
+    },
+    picker: {
+        width: '100%', // Make picker take full width of modal content
+        height: 200, // Adjust height as needed
+    },
+    pickerItem: {
+        // Optional styling for picker items
+        fontSize: 16,
+        color: '#333',
     },
 });
 

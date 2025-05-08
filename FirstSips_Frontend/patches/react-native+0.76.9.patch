@@ -1,0 +1,12 @@
+diff --git a/node_modules/react-native/Libraries/Components/TextInput/TextInputState.js b/node_modules/react-native/Libraries/Components/TextInput/TextInputState.js
+index 123456..789012 100644
+--- a/node_modules/react-native/Libraries/Components/TextInput/TextInputState.js
++++ b/node_modules/react-native/Libraries/Components/TextInput/TextInputState.js
+@@ -23,7 +23,7 @@ import type {HostComponent} from '../../Renderer/shims/ReactNativeTypes';
+ 
+ const {findNodeHandle} = require('../../ReactNative/RendererProxy');
+-const Platform = require('../../Utilities/Platform');
++const Platform = require('react-native/Libraries/Utilities/Platform');
+ const React = require('react');
+ type ComponentRef = React.ElementRef<HostComponent<mixed>>;
+ 

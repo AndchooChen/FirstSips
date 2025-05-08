@@ -3,8 +3,7 @@ import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, ScrollView }
 import ItemCard from "../../components/ItemCard";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { FIREBASE_DB } from "../../auth/FirebaseConfig";
-import { collection, query, onSnapshot, doc, getDoc, DocumentData } from 'firebase/firestore';
+import { supabase } from "../../utils/supabase";
 
 interface ShopItem {
   id: string;
@@ -19,50 +18,59 @@ interface CartItem extends ShopItem {
   quantity: number;
 }
 
-
-
-const ShopScreen = () => {
+const OpenedShopScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { shopId } = params;
   const [shopName, setShopName] = useState<string>("");
   const [shopDescription, setShopDescription] = useState<string>("");
-  const [shopData, setShopData] = useState<DocumentData | null>(null);
+  const [shopData, setShopData] = useState(null);
   const [items, setItems] = useState<ShopItem[]>([]);
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
-
   useEffect(() => {
-    // Fetch shop details
     const fetchShopData = async () => {
       try {
-        const shopDoc = await getDoc(doc(FIREBASE_DB, "shops", shopId as string));
-        if (shopDoc.exists()) {
-          const data = shopDoc.data();
-          setShopData(data);
-          setShopName(data.shopName || "");
-          setShopDescription(data.description || "");
-        }
+        const { data: shopData, error: shopError } = await supabase
+          .from("shops")
+          .select("*")
+          .eq("id", shopId)
+          .single();
+  
+        if (shopError) throw shopError;
+  
+        setShopData(shopData);
+        setShopName(shopData.shop_name || "");
+        setShopDescription(shopData.description || "");
       } catch (error) {
         console.error("Error fetching shop:", error);
       }
     };
-
-    // Fetch shop items
-    const itemsQuery = query(collection(FIREBASE_DB, `shops/${shopId}/items`));
-    const unsubscribe = onSnapshot(itemsQuery, (snapshot) => {
-      const itemsList: ShopItem[] = [];
-      snapshot.forEach((doc) => {
-        itemsList.push({ id: doc.id, ...doc.data() } as ShopItem);
-      });
-      setItems(itemsList);
-
-    });
-
+  
+    const fetchShopItems = async () => {
+      try {
+        const { data: itemsData, error: itemsError } = await supabase
+          .from("items")
+          .select("*")
+          .eq("shop_id", shopId);
+  
+        if (itemsError) throw itemsError;
+  
+        const formattedItems: ShopItem[] = itemsData.map((item) => ({
+          ...item,
+          id: item.id,
+        }));
+  
+        setItems(formattedItems);
+      } catch (error) {
+        console.error("Error fetching items:", error);
+      }
+    };
+  
     fetchShopData();
-    return () => unsubscribe();
-  }, [shopId]);
+    fetchShopItems();
+  }, [shopId]);  
 
   // Add to cart function
   const handleAddToCart = (item: ShopItem, quantityChange: number) => {
@@ -130,6 +138,7 @@ const ShopScreen = () => {
       return;
     }
 
+    console.log("Shop ID:", shopId);
     router.push({
       pathname: "../../(checkout)/CheckoutScreen",
       params: {
@@ -140,15 +149,14 @@ const ShopScreen = () => {
   };
 
   const handleOwnerInfo = () => {
-    if (shopData?.ownerId) {
+    console.log(shopData?.owner_id);
+    if (shopData?.owner_id) {
       router.push({
         pathname: "/(tabs)/shop_front/OwnerInfoScreen",
-        params: { ownerId: shopData.ownerId }
+        params: { owner_id: shopData.owner_id }
       });
     }
   };
-
-
 
   return (
     <View style={styles.container}>
@@ -172,8 +180,8 @@ const ShopScreen = () => {
         <View style={styles.shopInfo}>
           <Image
             source={
-              shopData?.profileImage
-                ? { uri: shopData.profileImage }
+              shopData?.profile_image
+                ? { uri: shopData.profile_image }
                 : require("../../assets/images/no_shop_image.png")
             }
             style={styles.shopImage}
@@ -181,8 +189,6 @@ const ShopScreen = () => {
           <Text style={styles.shopName}>{shopName}</Text>
           <Text style={styles.shopDescription}>{shopDescription}</Text>
         </View>
-
-
 
         <FlatList
           data={items}
@@ -307,4 +313,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ShopScreen;
+export default OpenedShopScreen; 
